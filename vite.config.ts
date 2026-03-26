@@ -22,11 +22,11 @@ export default defineConfig({
       overlay: false, // <--- ESTO DESACTIVA EL ERROR QUE ESTÁS VIENDO
     },
     port: 3000,
-    https: {
-      // Usamos los certificados de mkcert
+    /*https: {
       key: fs.readFileSync(path.resolve(__dirname, '.cert/localhost-key.pem')),
       cert: fs.readFileSync(path.resolve(__dirname, '.cert/localhost.pem')),
-    },
+    },*/
+    https: false,
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "require-corp",
