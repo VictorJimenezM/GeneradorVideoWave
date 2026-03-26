@@ -1,4 +1,3 @@
 {
-    "installCommand": "npm install --legacy-peer-deps",
-    "buildCommand": "npx vite build"
+    "buildCommand": "node node_modules/vite/bin/vite.js build"
 }
