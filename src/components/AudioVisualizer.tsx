@@ -1101,12 +1101,56 @@ export default function AudioVisualizer() {
         <aside className="w-full md:w-72">
           <div className="space-y-3">
             <div className="space-y-0.5">
-              <div className="text-sm font-medium">Configuración</div>
+              <div className="text-sm font-medium">PROCESO</div>
+
               <div className="text-xs text-slate-300">
-                Ajusta parámetros y mira el preview en vivo.
+                Sigue los siguientes pasos
               </div>
+              
             </div>
 
+            <div className="flex flex-col gap-2">
+              <label className="block">
+                <div className="text-xs font-medium text-slate-300">1.- SUBE UN ARCHIVO PARA EMPEZAR.</div>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  disabled={isDecoding || isRecording || isPreviewing}
+                  className="mt-1 block w-full rounded-lg border border-slate-800 bg-slate-950/40 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-500/20 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30"
+                  onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+
+              {fileMeta ? (
+                <div className="text-xs text-slate-400">{fileMeta}</div>
+              ) : (
+                <div className="text-xs text-slate-400">
+                  Click para seleccionar archivo audio
+                </div>
+              )}
+            </div>
+
+            <div className="text-xs text-slate-300">
+              2.- AJUSTA LOS PARÁMETROS MIENTRAS PREVISUALIZAS EL VIDEO EN VIVO.
+            </div>
+
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handlePreview}
+                disabled={
+                  isDecoding ||
+                  isRecording ||
+                  isPreviewing ||
+                  !audioUrl ||
+                  !waveformReady
+                }
+                className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previsualizar
+              </button>
+            
             <label className="block">
               <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
                 <span>Radio del círculo</span>
@@ -1195,36 +1239,17 @@ export default function AudioVisualizer() {
               Loop (para la animación de preview)
             </label>
 
-            <label className="flex items-center gap-2 text-xs text-slate-300">
+            {/*<label className="flex items-center gap-2 text-xs text-slate-300">
               <input
                 type="checkbox"
                 checked={transparentBg}
                 onChange={(e) => setTransparentBg(e.target.checked)}
                 disabled={isExporting || isRecording}
               />
-              Fondo transparente (export offline)
-            </label>
+              Fondo transparente (export offline)zz
+            </label>*/}
 
-            <div className="flex flex-col gap-2">
-              <label className="block">
-                <div className="text-xs font-medium text-slate-300">Cargar audio</div>
-                <input
-                  type="file"
-                  accept="audio/*"
-                  disabled={isDecoding || isRecording || isPreviewing}
-                  className="mt-1 block w-full rounded-lg border border-slate-800 bg-slate-950/40 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-500/20 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30"
-                  onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-
-              {fileMeta ? (
-                <div className="text-xs text-slate-400">{fileMeta}</div>
-              ) : (
-                <div className="text-xs text-slate-400">
-                  Sube un archivo para empezar.
-                </div>
-              )}
-            </div>
+            
 
             {error ? (
               <div className="rounded-lg border border-rose-900/40 bg-rose-950/40 p-3 text-sm text-rose-200">
@@ -1237,22 +1262,9 @@ export default function AudioVisualizer() {
               </div>
             ) : null}
 
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handlePreview}
-                disabled={
-                  isDecoding ||
-                  isRecording ||
-                  isPreviewing ||
-                  !audioUrl ||
-                  !waveformReady
-                }
-                className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Previsualizar
-              </button>
-              <button
+            
+              
+              {/*<button
                 type="button"
                 onClick={handleGenerateAndDownload}
                 disabled={
@@ -1266,7 +1278,17 @@ export default function AudioVisualizer() {
                 className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-medium text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Generar y Descargar (Offline MP4)
+              </button>*/}
+
+              <button
+                type="button"
+                onClick={() => void stopAll()}
+                disabled={(!isRecording && !isPreviewing) || isDecoding}
+                className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Stop
               </button>
+
               <button
                 type="button"
                 onClick={() => void handleGenerateAndDownloadRealtime()}
@@ -1279,18 +1301,11 @@ export default function AudioVisualizer() {
                 }
                 className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Generar y Descargar (Tiempo Real)
+                3.- GENERAR Y DESCARGAR VIDEO
               </button>
-              <button
-                type="button"
-                onClick={() => void stopAll()}
-                disabled={(!isRecording && !isPreviewing) || isDecoding}
-                className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Stop
-              </button>
+
               <div className="text-xs text-slate-400">
-                Video cuadrado &gt;= 1080x1080. (Captura del canvas.)
+              Esperar a que termine la reproducción audio para descargar video cuadrado 1080x1080
               </div>
 
               {isExporting ? (
@@ -1316,7 +1331,7 @@ export default function AudioVisualizer() {
                 </div>
               ) : null}
 
-              {!isFFmpegLoaded ? (
+              {/*{!isFFmpegLoaded ? (
                 <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
                   <span>Cargando FFmpeg…</span>
                   <button
@@ -1333,7 +1348,8 @@ export default function AudioVisualizer() {
                 <div className="rounded-lg border border-rose-900/40 bg-rose-950/40 p-3 text-sm text-rose-200">
                   {ffmpegLoadError}
                 </div>
-              ) : null}
+              ) : null}*/}
+
             </div>
           </div>
         </aside>
@@ -1341,7 +1357,7 @@ export default function AudioVisualizer() {
         <div className="flex-1">
           <div className="space-y-2">
             <div className="text-sm font-medium">
-              Waveform circular progresivo
+              SOUNDWAVE RENDER
             </div>
             <div className="text-xs text-slate-400">
               Reproduce el audio y el trazo avanza en 360 grados según el
@@ -1354,7 +1370,7 @@ export default function AudioVisualizer() {
             <audio ref={audioRef} className="hidden" />
           </div>
           <div className="mt-2 text-xs text-slate-400">
-            Consejo: para generar video social, sube un mp3/wav y usa{" "}
+            Consejo: para generar video musical simple, sube un mp3/wav y usa{" "}
             <span className="font-medium text-slate-200">Generar y Descargar Video</span>.
           </div>
         </div>
