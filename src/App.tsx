@@ -34,7 +34,7 @@ export default function App() {
             <iframe 
               width="560" 
               height="315" 
-              src="https://youtu.be/8DkfEmRST10?si=UnTchp84FjnbCleH" 
+              src="https://www.youtube.com/embed/8DkfEmRST10" 
               title="Ejemplo SoundWave Render"
               frameborder="0" 
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
