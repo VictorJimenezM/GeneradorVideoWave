@@ -30,6 +30,11 @@ export default function App() {
         <main>
           <AudioVisualizer />
         </main>
+
+          <p className="text-sm text-slate-300">
+            Ejemplo de Soundwave Render       
+          </p>
+
           <div class="contenedor-video">
             <iframe 
               width="560" 
