@@ -1370,8 +1370,7 @@ export default function AudioVisualizer() {
             <audio ref={audioRef} className="hidden" />
           </div>
           <div className="mt-2 text-xs text-slate-400">
-            Consejo: para generar video musical simple, sube un mp3/wav y usa{" "}
-            <span className="font-medium text-slate-200">Generar y Descargar Video</span>.
+            Consejo: selecciona fondo color verde pastel croma (FONDO TRANSPARENTE)            
           </div>
         </div>
       </div>
