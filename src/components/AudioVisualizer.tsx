@@ -1305,7 +1305,7 @@ export default function AudioVisualizer() {
               </button>
 
               <div className="text-xs text-slate-400">
-              IMPORTANTE: Esperar en PRIMER PLANO para que capture CORRECTAMENTE el video, terminado el audio empezara la descarga automatica.
+              IMPORTANTE: Esperar en PRIMER PLANO para que se capture CORRECTAMENTE el video, terminado el audio empezara la descarga automaticamente.
               </div>
 
               {isExporting ? (
