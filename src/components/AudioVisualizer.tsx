@@ -1286,7 +1286,7 @@ export default function AudioVisualizer() {
                 disabled={(!isRecording && !isPreviewing) || isDecoding}
                 className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Stop
+                Stop Previsualizar
               </button>
 
               <button
@@ -1370,7 +1370,7 @@ export default function AudioVisualizer() {
             <audio ref={audioRef} className="hidden" />
           </div>
           <div className="mt-2 text-xs text-slate-400">
-            Consejo: selecciona fondo color verde pastel croma (FONDO TRANSPARENTE)            
+            Consejo: selecciona fondo color verde pastel para fondo trasparente tipo croma            
           </div>
         </div>
       </div>
