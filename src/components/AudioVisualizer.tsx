@@ -1305,7 +1305,7 @@ export default function AudioVisualizer() {
               </button>
 
               <div className="text-xs text-slate-400">
-              Esperar a que termine la reproducción audio para descargar video cuadrado 1080x1080
+              Esperar a que termine la reproducción audio para descargar un video cuadrado de 1080x1080 px.
               </div>
 
               {isExporting ? (
