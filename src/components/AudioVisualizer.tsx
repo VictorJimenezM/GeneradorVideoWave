@@ -1305,7 +1305,7 @@ export default function AudioVisualizer() {
               </button>
 
               <div className="text-xs text-slate-400">
-              IMPORTANTE: Esperar en PRIMER PLANO a que termine la reproducción de audio para descargar el video cuadrado de 1080x1080 px.
+              IMPORTANTE: Esperar en PRIMER PLANO para que capture CORRECTAMENTE el video, terminado el audio empezara la descarga automatica.
               </div>
 
               {isExporting ? (
