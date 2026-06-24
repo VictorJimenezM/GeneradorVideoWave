@@ -75,6 +75,19 @@ export default function AudioVisualizer() {
   >("idle");
   const [transparentBg, setTransparentBg] = useState(false);
 
+  // Song title overlay
+  const [songTitle, setSongTitle] = useState("");
+  const [titleColor, setTitleColor] = useState("#ffffff");
+
+  // AI image generation (HuggingFace)
+  const [hfToken, setHfToken] = useState("");
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  // Store original audio file for FFmpeg muxing
+  const audioFileRef = useRef<File | null>(null);
+  const [isMuxing, setIsMuxing] = useState(false);
+
   // UI / audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioObjectUrlRef = useRef<string | null>(null);
@@ -103,12 +116,14 @@ export default function AudioVisualizer() {
     strokeWidth,
     waveColor,
     bgColor,
+    songTitle,
+    titleColor,
   });
 
   useEffect(() => {
-    paramsRef.current = { radiusRatio, intensity, strokeWidth, waveColor, bgColor };
+    paramsRef.current = { radiusRatio, intensity, strokeWidth, waveColor, bgColor, songTitle, titleColor };
     bgImageRef.current = bgImage; // Sincronización crítica con el hilo de animación
-  }, [radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage]);
+  }, [radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage, songTitle, titleColor]);
 
   // Live preview: if parameters change while previewing, we clear the canvas
   // and let the current animation frame redraw with the new style.
@@ -307,26 +322,28 @@ export default function AudioVisualizer() {
     const ffmpeg = new FFmpeg();
     ffmpegRef.current = ffmpeg;
 
-    const checkURL = async (url: string, label: string) => {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) {
-        throw new Error(`${label} fetch failed: ${res.status} ${res.statusText}`);
-      }
-    };
+    if (typeof SharedArrayBuffer === "undefined") {
+      const msg = "SharedArrayBuffer no disponible. El navegador requiere cabeceras COOP/COEP (Cross-Origin-Isolation).";
+      console.error("[FFmpeg]", msg);
+      setFfmpegLoadError(msg);
+      throw new Error(msg);
+    }
 
-    const LOAD_TIMEOUT_MS = 60000;
+    ffmpeg.on("log", ({ message }) => {
+      if (message.startsWith("frame=") || message.includes("Error") || message.includes("Cannot")) {
+        console.log("[FFmpeg]", message);
+      }
+    });
+
+    const LOAD_TIMEOUT_MS = 15000;
     try {
-      await Promise.all([
-        checkURL(coreURL, "ffmpeg-core.js"),
-        checkURL(wasmURL, "ffmpeg-core.wasm"),
-        checkURL(workerURL, "ffmpeg-core.worker.js"),
-      ]);
+      console.log("[FFmpeg] Cargando desde:", { coreURL, wasmURL, workerURL });
 
       await Promise.race([
         ffmpeg.load({ coreURL, wasmURL, workerURL } as any),
         new Promise((_, reject) =>
           setTimeout(
-            () => reject(new Error("Timeout cargando FFmpeg core/wasm")),
+            () => reject(new Error("Timeout — FFmpeg no respondió en 15s. Revisa cabeceras COOP/COEP y consola.")),
             LOAD_TIMEOUT_MS
           )
         ),
@@ -334,10 +351,12 @@ export default function AudioVisualizer() {
 
       setIsFFmpegLoaded(true);
       setFfmpegLoadError(null);
+      console.log("[FFmpeg] Cargado exitosamente");
       return ffmpeg;
     } catch (e: any) {
       setIsFFmpegLoaded(false);
-      const msg = e?.message ?? "No se pudo cargar FFmpeg offline. Revisa consola y headers COEP/COOP.";
+      const msg = e?.message ?? "Error desconocido cargando FFmpeg.";
+      console.error("[FFmpeg] Error:", msg);
       setFfmpegLoadError(msg);
       throw e;
     }
@@ -423,6 +442,18 @@ export default function AudioVisualizer() {
     ctx.arc(tipX, tipY, Math.max(2, strokeWidth * 0.9), 0, TWO_PI);
     ctx.fill();
     ctx.restore();
+
+    // Draw title overlay
+    const { songTitle, titleColor } = paramsRef.current;
+    if (songTitle) {
+      ctx.save();
+      ctx.fillStyle = titleColor;
+      ctx.font = `bold ${Math.floor(size * 0.035)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(songTitle, size / 2, size * 0.93);
+      ctx.restore();
+    }
   };
 
   const buildPrecomputedGeometry = () => {
@@ -653,6 +684,18 @@ export default function AudioVisualizer() {
     lastTipRef.current = { x, y, r: tipRadius };
   };
 
+  const drawTitle = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+    const { songTitle, titleColor } = paramsRef.current;
+    if (!songTitle) return;
+    ctx.save();
+    ctx.fillStyle = titleColor;
+    ctx.font = `bold ${Math.floor(canvas.width * 0.035)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(songTitle, canvas.width / 2, canvas.height * 0.93);
+    ctx.restore();
+  };
+
   const tick = () => {
     const audioEl = audioRef.current;
     const canvas = canvasRef.current;
@@ -703,6 +746,7 @@ export default function AudioVisualizer() {
     }
 
     drawTip(progress01);
+    drawTitle(ctx, canvas);
 
     if (!audioEl.loop && progress01 >= 1) {
       isAnimatingRef.current = false;
@@ -711,9 +755,7 @@ export default function AudioVisualizer() {
         rafRef.current = null;
       }
 
-      if (drawingModeRef.current === "record") {
-        finishRecordRef.current?.();
-      } else {
+      if (drawingModeRef.current !== "record") {
         setIsPreviewing(false);
       }
       return;
@@ -806,6 +848,51 @@ export default function AudioVisualizer() {
     setTimeout(() => URL.revokeObjectURL(url), 15000);
   };
 
+  const muxWithFFmpeg = async (videoBlob: Blob): Promise<Blob> => {
+    setIsMuxing(true);
+    try {
+      const ffmpeg = await ensureFFmpegLoaded();
+
+      setExportStage("encoding");
+      setExportProgress(0.1);
+
+      const videoData = new Uint8Array(await videoBlob.arrayBuffer());
+      await ffmpeg.writeFile("input.webm", videoData);
+      setExportProgress(0.3);
+
+      const audioFile = audioFileRef.current;
+      if (!audioFile) throw new Error("No hay archivo de audio original");
+
+      const origName = audioFile.name || "audio.mp3";
+      const audioName = origName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const audioData = new Uint8Array(await audioFile.arrayBuffer());
+      await ffmpeg.writeFile(audioName, audioData);
+      setExportProgress(0.5);
+
+      // Re-encode video to H.264 + AAC audio
+      // -map explicitly selects video from webm and audio from the original file
+      await ffmpeg.exec([
+        "-i", "input.webm",
+        "-i", audioName,
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-c:a", "aac",
+        "-shortest",
+        "-movflags", "+faststart",
+        "output.mp4"
+      ]);
+      setExportProgress(0.9);
+
+      const data = await ffmpeg.readFile("output.mp4") as Uint8Array;
+      setExportProgress(1);
+      return new Blob([data.buffer], { type: "video/mp4" });
+    } finally {
+      setIsMuxing(false);
+    }
+  };
+
   const handleGenerateAndDownloadRealtime = async () => {
     setError(null);
     setRecordError(null);
@@ -848,8 +935,9 @@ export default function AudioVisualizer() {
         throw new Error("captureStream() no está soportado en este navegador.");
       }
 
-      const stream = captureStream.call(canvas, 30);
-      const recorder = new RecordRTC(stream, {
+      const canvasStream = captureStream.call(canvas, 30);
+
+      const recorder = new RecordRTC(canvasStream, {
         type: "video",
         mimeType: "video/webm;codecs=vp9",
         disableLogs: true,
@@ -866,17 +954,31 @@ export default function AudioVisualizer() {
 
         const r = recorderRef.current;
         recorderRef.current = null;
-        setIsExporting(false);
 
-        if (!r) return;
+        if (!r) {
+          setIsExporting(false);
+          return;
+        }
         r.stopRecording(() => {
-          try {
-            const blob: Blob | undefined = r.getBlob?.();
-            if (!blob) throw new Error("No se generó el video.");
-            downloadBlob(blob, "webm");
-          } catch (e: any) {
-            setRecordError(e?.message ?? "No se pudo descargar la grabación.");
-          }
+          (async () => {
+            try {
+              const blob: Blob | undefined = r.getBlob?.();
+              if (!blob) throw new Error("No se generó el video.");
+
+              // Try FFmpeg muxing for MP4 with audio
+              try {
+                const mp4Blob = await muxWithFFmpeg(blob);
+                downloadBlob(mp4Blob, "mp4");
+              } catch (ffErr: any) {
+                console.error("FFmpeg muxing falló:", ffErr);
+                setRecordError(`FFmpeg no disponible: ${ffErr?.message || "error desconocido"}. Descargando webm (solo video).`);
+                downloadBlob(blob, "webm");
+              }
+            } catch (e: any) {
+              setRecordError(e?.message ?? "No se pudo descargar la grabación.");
+            }
+            setIsExporting(false);
+          })();
         });
       };
 
@@ -931,6 +1033,48 @@ export default function AudioVisualizer() {
     reader.readAsDataURL(file);
   };
 
+  const generateAIImage = async () => {
+    if (!hfToken || !aiPrompt) return;
+    setIsGeneratingImage(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1",
+        {
+          headers: {
+            Authorization: `Bearer ${hfToken}`,
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+          body: JSON.stringify({ inputs: aiPrompt }),
+        }
+      );
+      if (!response.ok) {
+        if (response.status === 503) {
+          throw new Error("El modelo se está cargando. Espera unos segundos y vuelve a intentar.");
+        }
+        const text = await response.text().catch(() => "");
+        throw new Error(`Error HTTP ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        setBgImage(img);
+        bgImageRef.current = img;
+        setTimeout(() => clearCanvasSolid(), 50);
+        setIsGeneratingImage(false);
+      };
+      img.onerror = () => {
+        throw new Error("No se pudo decodificar la imagen generada.");
+      };
+      img.src = url;
+    } catch (e: any) {
+      setError(e?.message ?? "Error generando imagen con IA");
+      setIsGeneratingImage(false);
+    }
+  };
+
   const onPickFile = async (file: File | null) => {
     setError(null);
     setRecordError(null);
@@ -953,11 +1097,13 @@ export default function AudioVisualizer() {
     setWaveformReady(false);
     setIsDecoding(false);
 
+    audioFileRef.current = null;
     setFileName("");
     setFileSize(0);
     setAudioUrl(null);
 
     if (!file) return;
+    audioFileRef.current = file;
 
     const url = URL.createObjectURL(file);
     audioObjectUrlRef.current = url;
@@ -1130,6 +1276,58 @@ export default function AudioVisualizer() {
                 </label>
               </div>
 
+              <div className="border-t border-slate-800 pt-3">
+                <div className="text-xs font-medium text-slate-300 mb-1">TÍTULO DE LA CANCIÓN</div>
+                <input
+                  type="text"
+                  value={songTitle}
+                  onChange={(e) => setSongTitle(e.target.value)}
+                  placeholder="Mi canción..."
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-200"
+                />
+                <input
+                  type="color"
+                  value={titleColor}
+                  onChange={(e) => setTitleColor(e.target.value)}
+                  className="mt-1 h-8 w-full cursor-pointer rounded border border-slate-800 bg-slate-950/30"
+                />
+              </div>
+
+              <div className="border-t border-slate-800 pt-3">
+                <div className="text-xs font-medium text-slate-300 mb-1">GENERAR IMAGEN CON IA</div>
+                <input
+                  type="password"
+                  value={hfToken}
+                  onChange={(e) => setHfToken(e.target.value)}
+                  placeholder="HuggingFace API Token"
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-200 mb-1"
+                />
+                <input
+                  type="text"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Ej: banana, estilo digital art"
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-200 mb-1"
+                />
+                <button
+                  type="button"
+                  onClick={generateAIImage}
+                  disabled={!hfToken || !aiPrompt || isGeneratingImage}
+                  className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 w-full"
+                >
+                  {isGeneratingImage ? "Generando..." : "Generar con IA"}
+                </button>
+                {bgImage && (
+                  <button
+                    type="button"
+                    onClick={() => onPickBgImage(null)}
+                    className="mt-1 text-left text-[11px] text-rose-400 underline hover:text-rose-300"
+                  >
+                    Remover imagen generada
+                  </button>
+                )}
+              </div>
+
               <label className="flex items-center gap-2 text-xs text-slate-300">
                 <input
                   type="checkbox"
@@ -1167,15 +1365,38 @@ export default function AudioVisualizer() {
               <button
                 type="button"
                 onClick={() => void handleGenerateAndDownloadRealtime()}
-                disabled={isDecoding || isRecording || isExporting || !audioUrl || !waveformReady}
+                disabled={isDecoding || isRecording || isExporting || isMuxing || !audioUrl || !waveformReady}
                 className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                3.- GENERAR Y DESCARGAR VIDEO
+                3.- GENERAR Y DESCARGAR VIDEO{isMuxing ? " (MP4)" : ""}
               </button>
 
               <div className="text-xs text-slate-400">
                 IMPORTANTE: Esperar en PRIMER PLANO para que se capture CORRECTAMENTE el video, terminado el audio empezara la descarga automaticamente.
               </div>
+
+              {(isExporting || isMuxing) ? (
+                <div className="space-y-1 pt-1">
+                  <div className="text-xs text-slate-300">
+                    {isMuxing
+                      ? "Muxando video + audio (FFmpeg)..."
+                      : exportStage === "loading-ffmpeg"
+                        ? "Cargando encoder (FFmpeg)..."
+                        : exportStage === "encoding"
+                          ? "Codificando MP4..."
+                          : "Exportando..."}
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded bg-slate-800">
+                    <div
+                      className="h-full bg-indigo-500"
+                      style={{ width: `${Math.round(exportProgress * 100)}%` }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-slate-400 tabular-nums">
+                    {Math.round(exportProgress * 100)}%
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </aside>
