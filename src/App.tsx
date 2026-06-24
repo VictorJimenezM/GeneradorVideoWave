@@ -1,4 +1,4 @@
-import AudioVisualizer from "./components/AudioVisualizer";
+import AudioVisualizerG from "./components/AudioVisualizerG";
 
 export default function App() {
   return (
@@ -28,7 +28,7 @@ export default function App() {
         </header>
 
         <main>
-          <AudioVisualizer />
+          <AudioVisualizerG />
         </main>
 
           <p className="text-sm text-slate-300">

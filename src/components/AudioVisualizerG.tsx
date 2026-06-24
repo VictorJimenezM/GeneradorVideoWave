@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import RecordRTC from "recordrtc";
-import { toBlobURL } from "@ffmpeg/util";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 
 const TWO_PI = Math.PI * 2;
@@ -20,7 +19,6 @@ function clamp(n: number, min: number, max: number) {
 }
 
 function hexToRgba(hex: string, alpha: number) {
-  // Accept "#RRGGBB" or "#RGB"
   const h = hex.replace("#", "").trim();
   const full =
     h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0").slice(0, 6);
@@ -88,6 +86,10 @@ export default function AudioVisualizer() {
   const [isLoopingUI, setIsLoopingUI] = useState(true);
   const [isPreviewing, setIsPreviewing] = useState(false);
 
+  // --- TELEMETRÍA DE IMAGEN DE FONDO ---
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+  const bgImageRef = useRef<HTMLImageElement | null>(null);
+
   // Live parameters (state + refs for drawing loop).
   const [radiusRatio, setRadiusRatio] = useState(0.46); // radio base = min(cx,cy) * ratio
   const [intensity, setIntensity] = useState(0.28); // amp radius = radiusBase * intensity
@@ -105,7 +107,8 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     paramsRef.current = { radiusRatio, intensity, strokeWidth, waveColor, bgColor };
-  }, [radiusRatio, intensity, strokeWidth, waveColor, bgColor]);
+    bgImageRef.current = bgImage; // Sincronización crítica con el hilo de animación
+  }, [radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage]);
 
   // Live preview: if parameters change while previewing, we clear the canvas
   // and let the current animation frame redraw with the new style.
@@ -128,14 +131,12 @@ export default function AudioVisualizer() {
   }, [radiusRatio]);
 
   const stopAll = async () => {
-    // Stop animation loop first.
     isAnimatingRef.current = false;
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
 
-    // Stop audio.
     const audioEl = audioRef.current;
     if (audioEl) {
       try {
@@ -146,7 +147,6 @@ export default function AudioVisualizer() {
       }
     }
 
-    // Stop recorder if any.
     if (recorderRef.current) {
       try {
         recorderRef.current.stopRecording?.();
@@ -173,9 +173,20 @@ export default function AudioVisualizer() {
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
     const { bgColor } = paramsRef.current;
+    const img = bgImageRef.current;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (img) {
+      // Algoritmo de escalado "Cover" para mantener relación de aspecto intacta
+      const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+      const x = (canvas.width - img.width * scale) / 2;
+      const y = (canvas.height - img.height * scale) / 2;
+      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+    } else {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     hasClearedRef.current = true;
   };
 
@@ -184,8 +195,22 @@ export default function AudioVisualizer() {
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
     const { bgColor } = paramsRef.current;
-    ctx.fillStyle = hexToRgba(bgColor, alpha);
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const img = bgImageRef.current;
+
+    if (img) {
+      // Si hay imagen de fondo, redibujamos la imagen ligeramente encima para 
+      // simular el desvanecimiento de la onda sin destruir el fondo
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+      const x = (canvas.width - img.width * scale) / 2;
+      const y = (canvas.height - img.height * scale) / 2;
+      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = hexToRgba(bgColor, alpha);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
   };
 
   const syncCanvasSize = () => {
@@ -221,13 +246,8 @@ export default function AudioVisualizer() {
   const getOffscreenCanvas2D = (w: number, h: number) => {
     if (typeof (window as any).OffscreenCanvas !== "undefined") {
       const c = new (window as any).OffscreenCanvas(w, h);
-     
       const ctx = c.getContext("2d");
-
-      if (!ctx) {
-        throw new Error("No se pudo inicializar el contexto de dibujo");
-      }
-
+      if (!ctx) throw new Error("No se pudo inicializar el contexto de dibujo");
       return { canvas: c as any, ctx: ctx as any };
     }
     const c = document.createElement("canvas");
@@ -238,7 +258,6 @@ export default function AudioVisualizer() {
   };
 
   const canvasToPngBytes = async (c: any): Promise<Uint8Array> => {
-    // OffscreenCanvas: convertToBlob; HTMLCanvasElement: toBlob.
     let blob: Blob | null = null;
     if (typeof c.convertToBlob === "function") {
       blob = await c.convertToBlob({ type: "image/png" });
@@ -251,12 +270,6 @@ export default function AudioVisualizer() {
     return new Uint8Array(await blob.arrayBuffer());
   };
 
-  const toBlobURL = async (url: string, type: string) => {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
-  };
-  
   const ensureFFmpegLoaded = async () => {
     if (ffmpegRef.current && isFFmpegLoaded) return ffmpegRef.current;
 
@@ -272,15 +285,12 @@ export default function AudioVisualizer() {
           const res = await fetch(url, { cache: "no-store" });
           if (res.ok) return url;
         } catch {
-          // ignore and try next candidate
+          // ignore
         }
       }
       throw new Error(`No se encontró ${label} en rutas: ${candidates.join(", ")}`);
     };
 
-    // Soportamos ambos layouts:
-    // - public/ffmpeg-core.*  -> /ffmpeg-core.*
-    // - public/ffmpeg/ffmpeg-core.* -> /ffmpeg/ffmpeg-core.*
     const coreURL = await resolveURL(
       ["/ffmpeg-core.js", "/ffmpeg/ffmpeg-core.js"],
       "ffmpeg-core.js"
@@ -300,15 +310,12 @@ export default function AudioVisualizer() {
     const checkURL = async (url: string, label: string) => {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) {
-        throw new Error(
-          `${label} fetch failed: ${res.status} ${res.statusText}`
-        );
+        throw new Error(`${label} fetch failed: ${res.status} ${res.statusText}`);
       }
     };
 
     const LOAD_TIMEOUT_MS = 60000;
     try {
-      // Validate resources exist before starting heavy ffmpeg.load().
       await Promise.all([
         checkURL(coreURL, "ffmpeg-core.js"),
         checkURL(wasmURL, "ffmpeg-core.wasm"),
@@ -330,21 +337,9 @@ export default function AudioVisualizer() {
       return ffmpeg;
     } catch (e: any) {
       setIsFFmpegLoaded(false);
-      const msg =
-        e?.message ??
-        "No se pudo cargar FFmpeg offline. Revisa consola y headers COEP/COOP.";
+      const msg = e?.message ?? "No se pudo cargar FFmpeg offline. Revisa consola y headers COEP/COOP.";
       setFfmpegLoadError(msg);
       throw e;
-    }
-  };
-
-  const loadFFmpeg = async () => {
-    try {
-      await ensureFFmpegLoaded();
-    } catch {
-      // error already stored in state
-    } finally {
-      setExportStage("idle");
     }
   };
 
@@ -362,10 +357,16 @@ export default function AudioVisualizer() {
     if (!monoSamples || !totalSamples || !duration || !cosArr || !sinArr) return;
 
     const { radiusRatio, intensity, strokeWidth, waveColor, bgColor } = paramsRef.current;
+    const img = bgImageRef.current;
 
-    // Clear
+    // Clear / Draw background
     if (opts.transparent) {
       ctx.clearRect(0, 0, size, size);
+    } else if (img) {
+      const scale = Math.max(size / img.width, size / img.height);
+      const x = (size - img.width * scale) / 2;
+      const y = (size - img.height * scale) / 2;
+      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
     } else {
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, size, size);
@@ -382,7 +383,6 @@ export default function AudioVisualizer() {
     const headPointIndex = Math.floor(headSampleIndex / step);
     const head = clamp(headPointIndex, 0, pointCountRef.current - 1);
 
-    // Smooth path with quadratic midpoints
     ctx.save();
     ctx.lineWidth = Math.max(1, strokeWidth);
     ctx.strokeStyle = waveColor;
@@ -411,7 +411,6 @@ export default function AudioVisualizer() {
     ctx.lineTo(prevX, prevY);
     ctx.stroke();
 
-    // Tip
     const headAngle = progress01 * TWO_PI - Math.PI / 2;
     const tipAmp = monoSamples[headSampleIndex] ?? 0;
     const tipR = radiusBase + tipAmp * radiusAmp;
@@ -440,7 +439,7 @@ export default function AudioVisualizer() {
     const sinArr = new Float32Array(pc);
     for (let i = 0; i < pc; i++) {
       const sampleIdx = i * step;
-      const theta = (sampleIdx / totalSamples) * TWO_PI - Math.PI / 2; // 0 at top
+      const theta = (sampleIdx / totalSamples) * TWO_PI - Math.PI / 2;
       cosArr[i] = Math.cos(theta);
       sinArr[i] = Math.sin(theta);
     }
@@ -460,8 +459,7 @@ export default function AudioVisualizer() {
     void lastIdRef;
 
     try {
-      const AudioContextCtor =
-        window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext: AudioContext = new AudioContextCtor();
 
       const arrayBuffer = await file.arrayBuffer();
@@ -531,7 +529,7 @@ export default function AudioVisualizer() {
 
     const step = sampleStepRef.current;
     const sampleIdx = clamp(pointIndex * step, 0, totalSamples - 1);
-    const amp = monoSamples[sampleIdx] ?? 0; // [-1,1]
+    const amp = monoSamples[sampleIdx] ?? 0;
 
     const radiusBase = rMin * radiusRatio;
     const radiusAmp = radiusBase * intensity;
@@ -554,15 +552,12 @@ export default function AudioVisualizer() {
 
     const { strokeWidth, waveColor } = paramsRef.current;
 
-    // Quadratic smoothing via midpoints. This is "smooth path" without
-    // reallocating huge arrays per frame.
     ctx.save();
     ctx.lineWidth = Math.max(1, strokeWidth);
     ctx.strokeStyle = waveColor;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Seed starting point.
     let prev = lastCurvePointRef.current;
     if (!prev) {
       prev = getPointXY(fromPoint);
@@ -576,13 +571,11 @@ export default function AudioVisualizer() {
       const p = getPointXY(i);
       const midX = (prev.x + p.x) / 2;
       const midY = (prev.y + p.y) / 2;
-      // Smooth-ish segment; uses previous point as control point.
       ctx.quadraticCurveTo(prev.x, prev.y, midX, midY);
       prev = p;
       lastCurvePointRef.current = prev;
     }
 
-    // Ensure path reaches the last point exactly.
     ctx.lineTo(prev.x, prev.y);
     ctx.stroke();
     ctx.restore();
@@ -597,11 +590,10 @@ export default function AudioVisualizer() {
     const monoSamples = monoSamplesRef.current;
     const totalSamples = totalSamplesRef.current;
     const duration = durationRef.current;
-    const cosArr = precomputedCosRef.current;
-    const sinArr = precomputedSinRef.current;
-    if (!monoSamples || !totalSamples || !duration || !cosArr || !sinArr) return;
+    if (!monoSamples || !totalSamples || !duration) return;
 
-    const { intensity, radiusRatio, waveColor, bgColor } = paramsRef.current;
+    const { intensity, radiusRatio, waveColor } = paramsRef.current;
+    const img = bgImageRef.current;
 
     const w = canvas.width;
     const h = canvas.height;
@@ -610,7 +602,6 @@ export default function AudioVisualizer() {
     const rMin = Math.min(cx, cy);
 
     const headAngle = progress01 * TWO_PI - Math.PI / 2;
-    const sampleStep = sampleStepRef.current;
     const headSampleIndex = Math.floor(progress01 * (totalSamples - 1));
     const amp = monoSamples[headSampleIndex] ?? 0;
 
@@ -623,31 +614,31 @@ export default function AudioVisualizer() {
 
     const tipRadius = Math.max(2, Math.min(10, (ctx.lineWidth || 4) * 0.9));
 
-    // If we are not fading (no loop), erase previous tip to avoid ghosting.
-    if (drawingModeRef.current !== "record") {
-      // For preview, we know fade is driven by loop toggle.
-      const shouldFade = isLoopingUI;
-      if (!shouldFade && lastTipRef.current) {
-        const prev = lastTipRef.current;
-        ctx.save();
-        ctx.fillStyle = bgColor;
-        ctx.beginPath();
-        ctx.arc(prev.x, prev.y, prev.r + 2, 0, TWO_PI);
-        ctx.fill();
-        ctx.restore();
+    // Si NO hay imagen de fondo, hacemos el borrado quirúrgico del cursor anterior para evitar fantasmas
+    if (!img) {
+      if (drawingModeRef.current !== "record") {
+        const shouldFade = isLoopingUI;
+        if (!shouldFade && lastTipRef.current) {
+          const prev = lastTipRef.current;
+          ctx.save();
+          ctx.fillStyle = paramsRef.current.bgColor;
+          ctx.beginPath();
+          ctx.arc(prev.x, prev.y, prev.r + 2, 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+        }
       }
-    }
 
-    if (drawingModeRef.current === "record") {
-      // For recorded (no loop), always erase previous tip.
-      if (lastTipRef.current) {
-        const prev = lastTipRef.current;
-        ctx.save();
-        ctx.fillStyle = bgColor;
-        ctx.beginPath();
-        ctx.arc(prev.x, prev.y, prev.r + 2, 0, TWO_PI);
-        ctx.fill();
-        ctx.restore();
+      if (drawingModeRef.current === "record") {
+        if (lastTipRef.current) {
+          const prev = lastTipRef.current;
+          ctx.save();
+          ctx.fillStyle = paramsRef.current.bgColor;
+          ctx.beginPath();
+          ctx.arc(prev.x, prev.y, prev.r + 2, 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+        }
       }
     }
 
@@ -685,31 +676,24 @@ export default function AudioVisualizer() {
     const headPointIndex = Math.floor(headSampleIndex / step);
     const head = clamp(headPointIndex, 0, pointCount - 1);
 
-    // Determine if we should fade (loop mode).
     const shouldFade = audioEl.loop || (drawingModeRef.current !== "record" && isLoopingUI);
     if (!hasClearedRef.current) {
       clearCanvasSolid();
       resetDrawingState();
       hasClearedRef.current = true;
-      // Start curve at 0 immediately.
       lastDrawnPointIndexRef.current = 0;
       lastCurvePointRef.current = getPointXY(0);
     } else if (shouldFade) {
-      // Slow fade to keep old trails but let them soften over loops.
       fadeCanvas(0.02);
     }
 
-    // If we looped and progress wrapped back, reset drawing increment (do not clear).
     if (head < lastDrawnPointIndexRef.current && shouldFade) {
       lastDrawnPointIndexRef.current = -1;
       lastCurvePointRef.current = null;
-      // Tip will be erased/redrawn anyway.
     }
 
-    // Draw incremental path from last drawn to current head.
     const last = lastDrawnPointIndexRef.current;
     if (last < 0) {
-      // Ensure starting point is seeded.
       lastDrawnPointIndexRef.current = 0;
       lastCurvePointRef.current = getPointXY(0);
       if (head > 0) drawAdditionalPath(0, head);
@@ -718,10 +702,8 @@ export default function AudioVisualizer() {
       lastDrawnPointIndexRef.current = head;
     }
 
-    // Draw tip.
     drawTip(progress01);
 
-    // Stop at the end for preview (non-loop) and record.
     if (!audioEl.loop && progress01 >= 1) {
       isAnimatingRef.current = false;
       if (rafRef.current != null) {
@@ -730,7 +712,6 @@ export default function AudioVisualizer() {
       }
 
       if (drawingModeRef.current === "record") {
-        // In modo record, finalizamos/exportamos exactamente al 100%.
         finishRecordRef.current?.();
       } else {
         setIsPreviewing(false);
@@ -768,17 +749,12 @@ export default function AudioVisualizer() {
     if (!audioUrl) throw new Error("No hay audio cargado");
     if (!waveformReady) throw new Error("Decodificación no lista");
 
-    // Reset audio.
     audioEl.loop = opts.loop;
     audioEl.currentTime = 0;
-
     audioEl.src = audioUrl;
     audioEl.volume = 1;
 
-    // Some browsers require resume after user gesture.
-    // (We don't create an AudioContext here; analysis is pre-decoded.)
     await audioEl.play();
-
     return audioEl;
   };
 
@@ -797,10 +773,9 @@ export default function AudioVisualizer() {
 
     try {
       stopAnimationOnly();
-      await stopAll(); // resets currentTime and stops any recorder
+      await stopAll();
       const audioEl = audioRef.current;
       if (!audioEl) return;
-      // startAnimation relies on currentTime progressing.
       await prepareAndPlay({ loop: isLoopingUI });
       ensureCanvasContext();
       clearCanvasSolid();
@@ -855,7 +830,6 @@ export default function AudioVisualizer() {
 
       setIsExporting(true);
       setIsPreviewing(false);
-      // Asegura resolución mínima 1080x1080 para el video.
       setCanvasVideoSquare1080();
       ensureCanvasContext();
       clearCanvasSolid();
@@ -863,17 +837,13 @@ export default function AudioVisualizer() {
 
       stopAnimationOnly();
 
-      // Evita que se solape el playback del preview.
       try {
         audioEl.pause();
       } catch {
         // ignore
       }
 
-      // Capture stream del canvas (video) para RecordRTC.
-      const captureStream = (canvas as any).captureStream as
-        | ((fps: number) => MediaStream)
-        | undefined;
+      const captureStream = (canvas as any).captureStream as ((fps: number) => MediaStream) | undefined;
       if (typeof captureStream !== "function") {
         throw new Error("captureStream() no está soportado en este navegador.");
       }
@@ -910,14 +880,12 @@ export default function AudioVisualizer() {
         });
       };
 
-      // Permite que el loop principal cierre/exporte cuando llegue al 100%.
       finishRecordRef.current = () => {
         finish();
       };
 
       recorder.startRecording();
 
-      // Reproduce hasta el final (sin loop) y dibuja en el canvas.
       audioEl.loop = false;
       audioEl.currentTime = 0;
       audioEl.src = audioUrl;
@@ -943,93 +911,24 @@ export default function AudioVisualizer() {
     }
   };
 
-  const handleGenerateAndDownload = async () => {
-    setError(null);
-    setRecordError(null);
-    if (isRecording || isExporting) return;
-    if (!audioUrl) {
-      setError("Primero carga un archivo de audio.");
+  const onPickBgImage = (file: File | null) => {
+    if (!file) {
+      setBgImage(null);
+      bgImageRef.current = null;
+      setTimeout(() => clearCanvasSolid(), 50);
       return;
     }
-    if (!waveformReady) {
-      setError(isDecoding ? "Decodificando audio..." : "Waveform no lista todavía.");
-      return;
-    }
-
-    try {
-      setIsExporting(true);
-      setExportProgress(0);
-
-      const ffmpeg = await ensureFFmpegLoaded();
-
-      const fps = 30;
-      const duration = durationRef.current;
-      if (!Number.isFinite(duration) || duration <= 0) {
-        throw new Error("Duración inválida para exportación.");
-      }
-
-      const totalFrames = Math.max(1, Math.ceil(duration * fps));
-      setExportStage("rendering-frames");
-
-      const size = 1080;
-      const { canvas: offCanvas, ctx: offCtx } = getOffscreenCanvas2D(size, size);
-      if (!offCtx) throw new Error("No se pudo crear contexto 2D offline.");
-
-      // Clean previous files (best-effort).
-      try {
-        // No directory ops; we just overwrite the same names.
-      } catch {
-        // ignore
-      }
-
-      for (let f = 0; f < totalFrames; f++) {
-        const progress01 = totalFrames === 1 ? 1 : f / (totalFrames - 1);
-        drawWaveFrameOffline(offCtx, size, progress01, { transparent: transparentBg });
-
-        const png = await canvasToPngBytes(offCanvas);
-        const name = `frame_${String(f).padStart(6, "0")}.png`;
-        await ffmpeg.writeFile(name, png);
-
-        if (f % 10 === 0 || f === totalFrames - 1) {
-          setExportProgress((f + 1) / totalFrames);
-        }
-      }
-
-      setExportStage("encoding");
-
-      // Encode to MP4 (H.264). Alpha is not reliably supported in standard MP4/H.264;
-      // we still attempt a best-effort encoding.
-      await ffmpeg.exec([
-        "-framerate",
-        String(fps),
-        "-i",
-        "frame_%06d.png",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "out.mp4",
-      ]);
-
-      const data = (await ffmpeg.readFile("out.mp4")) as Uint8Array;
-      downloadBlob(new Blob([data.buffer], { type: "video/mp4" }), "mp4");
-
-      // Cleanup frame files + output (best-effort)
-      try {
-        await ffmpeg.deleteFile("out.mp4");
-      } catch {
-        // ignore
-      }
-      // Deleting all frames individually is expensive; leave them in FS for now.
-
-      setExportStage("done");
-    } catch (e: any) {
-      setRecordError(e?.message ?? "No se pudo exportar el video offline.");
-    }
-    setIsExporting(false);
-    setExportStage("idle");
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        setBgImage(img);
+        bgImageRef.current = img;
+        clearCanvasSolid();
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   const onPickFile = async (file: File | null) => {
@@ -1071,8 +970,6 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     ensureCanvasContext();
-    // Preload FFmpeg once to avoid "ffmpeg is not loaded" at export time.
-    //void loadFFmpeg();
     return () => {
       stopAnimationOnly();
       if (recorderRef.current) {
@@ -1087,7 +984,6 @@ export default function AudioVisualizer() {
         audioObjectUrlRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fileMeta = useMemo(() => {
@@ -1102,11 +998,7 @@ export default function AudioVisualizer() {
           <div className="space-y-3">
             <div className="space-y-0.5">
               <div className="text-sm font-medium">PROCESO</div>
-
-              <div className="text-xs text-slate-300">
-                Sigue los siguientes pasos
-              </div>
-              
+              <div className="text-xs text-slate-300">Sigue los siguientes pasos</div>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -1124,9 +1016,29 @@ export default function AudioVisualizer() {
               {fileMeta ? (
                 <div className="text-xs text-slate-400">{fileMeta}</div>
               ) : (
-                <div className="text-xs text-slate-400">
-                  Click para seleccionar archivo audio
-                </div>
+                <div className="text-xs text-slate-400">Click para seleccionar archivo audio</div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="block">
+                <div className="text-xs font-medium text-slate-300">1.5.- INCLUIR IMAGEN DE FONDO (OPCIONAL)</div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={isDecoding || isRecording || isPreviewing}
+                  className="mt-1 block w-full rounded-lg border border-slate-800 bg-slate-950/40 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-500/20 file:px-3 file:py-2 file:text-sm file:font-medium file:text-cyan-200 hover:file:bg-cyan-500/30"
+                  onChange={(e) => onPickBgImage(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              {bgImage && (
+                <button 
+                  type="button"
+                  onClick={() => onPickBgImage(null)}
+                  className="text-left text-[11px] text-rose-400 underline hover:text-rose-300"
+                >
+                  Remover imagen de fondo
+                </button>
               )}
             </div>
 
@@ -1134,151 +1046,114 @@ export default function AudioVisualizer() {
               2.- AJUSTA LOS PARÁMETROS MIENTRAS PREVISUALIZAS EL VIDEO EN VIVO.
             </div>
 
-
             <div className="flex flex-col gap-2 pt-1">
               <button
                 type="button"
                 onClick={handlePreview}
-                disabled={
-                  isDecoding ||
-                  isRecording ||
-                  isPreviewing ||
-                  !audioUrl ||
-                  !waveformReady
-                }
+                disabled={isDecoding || isRecording || isPreviewing || !audioUrl || !waveformReady}
                 className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Previsualizar
               </button>
             
-            <label className="block">
-              <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
-                <span>Radio del círculo</span>
-                <span className="tabular-nums">{radiusRatio.toFixed(2)}</span>
-              </div>
-              <input
-                type="range"
-                min={0.25}
-                max={0.6}
-                step={0.01}
-                value={radiusRatio}
-                onChange={(e) => setRadiusRatio(parseFloat(e.target.value))}
-                disabled={isDecoding || isRecording}
-                className="mt-1 w-full"
-              />
-            </label>
-
-            <label className="block">
-              <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
-                <span>Intensidad de onda</span>
-                <span className="tabular-nums">{intensity.toFixed(2)}</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={0.8}
-                step={0.01}
-                value={intensity}
-                onChange={(e) => setIntensity(parseFloat(e.target.value))}
-                disabled={isDecoding || isRecording}
-                className="mt-1 w-full"
-              />
-            </label>
-
-            <label className="block">
-              <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
-                <span>Grosor del trazo</span>
-                <span className="tabular-nums">{strokeWidth.toFixed(1)}</span>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={10}
-                step={0.5}
-                value={strokeWidth}
-                onChange={(e) => setStrokeWidth(parseFloat(e.target.value))}
-                disabled={isDecoding || isRecording}
-                className="mt-1 w-full"
-              />
-            </label>
-
-            <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <div className="text-xs text-slate-300">Color de la onda</div>
+                <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
+                  <span>Radio del círculo</span>
+                  <span className="tabular-nums">{radiusRatio.toFixed(2)}</span>
+                </div>
                 <input
-                  type="color"
-                  value={waveColor}
-                  onChange={(e) => setWaveColor(e.target.value)}
+                  type="range"
+                  min={0.25}
+                  max={0.6}
+                  step={0.01}
+                  value={radiusRatio}
+                  onChange={(e) => setRadiusRatio(parseFloat(e.target.value))}
                   disabled={isDecoding || isRecording}
-                  className="mt-1 h-9 w-full cursor-pointer rounded border border-slate-800 bg-slate-950/30"
+                  className="mt-1 w-full"
                 />
               </label>
+
               <label className="block">
-                <div className="text-xs text-slate-300">Color de fondo</div>
+                <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
+                  <span>Intensidad de onda</span>
+                  <span className="tabular-nums">{intensity.toFixed(2)}</span>
+                </div>
                 <input
-                  type="color"
-                  value={bgColor}
-                  onChange={(e) => setBgColor(e.target.value)}
+                  type="range"
+                  min={0}
+                  max={0.8}
+                  step={0.01}
+                  value={intensity}
+                  onChange={(e) => setIntensity(parseFloat(e.target.value))}
                   disabled={isDecoding || isRecording}
-                  className="mt-1 h-9 w-full cursor-pointer rounded border border-slate-800 bg-slate-950/30"
+                  className="mt-1 w-full"
                 />
               </label>
-            </div>
 
-            <label className="flex items-center gap-2 text-xs text-slate-300">
-              <input
-                type="checkbox"
-                checked={isLoopingUI}
-                onChange={(e) => {
-                  const v = e.target.checked;
-                  setIsLoopingUI(v);
-                  if (audioRef.current) audioRef.current.loop = v;
-                }}
-                disabled={isRecording}
-              />
-              Loop (para la animación de preview)
-            </label>
+              <label className="block">
+                <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
+                  <span>Grosor del trazo</span>
+                  <span className="tabular-nums">{strokeWidth.toFixed(1)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={0.5}
+                  value={strokeWidth}
+                  onChange={(e) => setStrokeWidth(parseFloat(e.target.value))}
+                  disabled={isDecoding || isRecording}
+                  className="mt-1 w-full"
+                />
+              </label>
 
-            {/*<label className="flex items-center gap-2 text-xs text-slate-300">
-              <input
-                type="checkbox"
-                checked={transparentBg}
-                onChange={(e) => setTransparentBg(e.target.checked)}
-                disabled={isExporting || isRecording}
-              />
-              Fondo transparente (export offline)zz
-            </label>*/}
-
-            
-
-            {error ? (
-              <div className="rounded-lg border border-rose-900/40 bg-rose-950/40 p-3 text-sm text-rose-200">
-                {error}
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <div className="text-xs text-slate-300">Color de la onda</div>
+                  <input
+                    type="color"
+                    value={waveColor}
+                    onChange={(e) => setWaveColor(e.target.value)}
+                    disabled={isDecoding || isRecording}
+                    className="mt-1 h-9 w-full cursor-pointer rounded border border-slate-800 bg-slate-950/30"
+                  />
+                </label>
+                <label className="block">
+                  <div className="text-xs text-slate-300">Color de fondo</div>
+                  <input
+                    type="color"
+                    value={bgColor}
+                    onChange={(e) => setBgColor(e.target.value)}
+                    disabled={isDecoding || isRecording || bgImage !== null}
+                    className="mt-1 h-9 w-full cursor-pointer rounded border border-slate-800 bg-slate-950/30 disabled:opacity-30 disabled:cursor-not-allowed"
+                  />
+                </label>
               </div>
-            ) : null}
-            {recordError ? (
-              <div className="rounded-lg border border-rose-900/40 bg-rose-950/40 p-3 text-sm text-rose-200">
-                {recordError}
-              </div>
-            ) : null}
 
-            
-              
-              {/*<button
-                type="button"
-                onClick={handleGenerateAndDownload}
-                disabled={
-                  isDecoding ||
-                  isRecording ||
-                  isExporting ||
-                  !isFFmpegLoaded ||
-                  !audioUrl ||
-                  !waveformReady
-                }
-                className="rounded-lg bg-cyan-500 px-3 py-2 text-sm font-medium text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Generar y Descargar (Offline MP4)
-              </button>*/}
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={isLoopingUI}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    setIsLoopingUI(v);
+                    if (audioRef.current) audioRef.current.loop = v;
+                  }}
+                  disabled={isRecording}
+                />
+                Loop (para la animación de preview)
+              </label>
+
+              {error ? (
+                <div className="rounded-lg border border-rose-900/40 bg-rose-950/40 p-3 text-sm text-rose-200">
+                  {error}
+                </div>
+              ) : null}
+              {recordError ? (
+                <div className="rounded-lg border border-rose-900/40 bg-rose-950/40 p-3 text-sm text-rose-200">
+                  {recordError}
+                </div>
+              ) : null}
 
               <button
                 type="button"
@@ -1292,76 +1167,24 @@ export default function AudioVisualizer() {
               <button
                 type="button"
                 onClick={() => void handleGenerateAndDownloadRealtime()}
-                disabled={
-                  isDecoding ||
-                  isRecording ||
-                  isExporting ||
-                  !audioUrl ||
-                  !waveformReady
-                }
+                disabled={isDecoding || isRecording || isExporting || !audioUrl || !waveformReady}
                 className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 3.- GENERAR Y DESCARGAR VIDEO
               </button>
 
               <div className="text-xs text-slate-400">
-              IMPORTANTE: Esperar en PRIMER PLANO para que se capture CORRECTAMENTE el video, terminado el audio empezara la descarga automaticamente.
+                IMPORTANTE: Esperar en PRIMER PLANO para que se capture CORRECTAMENTE el video, terminado el audio empezara la descarga automaticamente.
               </div>
-
-              {isExporting ? (
-                <div className="space-y-1 pt-1">
-                  <div className="text-xs text-slate-300">
-                    {exportStage === "loading-ffmpeg"
-                      ? "Cargando encoder (FFmpeg)..."
-                      : exportStage === "rendering-frames"
-                        ? "Renderizando frames..."
-                        : exportStage === "encoding"
-                          ? "Codificando MP4..."
-                          : "Exportando..."}
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded bg-slate-800">
-                    <div
-                      className="h-full bg-indigo-500"
-                      style={{ width: `${Math.round(exportProgress * 100)}%` }}
-                    />
-                  </div>
-                  <div className="text-[11px] text-slate-400 tabular-nums">
-                    {Math.round(exportProgress * 100)}%
-                  </div>
-                </div>
-              ) : null}
-
-              {/*{!isFFmpegLoaded ? (
-                <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
-                  <span>Cargando FFmpeg…</span>
-                  <button
-                    type="button"
-                    onClick={() => void loadFFmpeg()}
-                    disabled={isExporting}
-                    className="rounded-md border border-slate-700 bg-slate-900/40 px-2 py-1 text-[11px] text-slate-200 disabled:opacity-50"
-                  >
-                    Reintentar
-                  </button>
-                </div>
-              ) : null}
-              {ffmpegLoadError ? (
-                <div className="rounded-lg border border-rose-900/40 bg-rose-950/40 p-3 text-sm text-rose-200">
-                  {ffmpegLoadError}
-                </div>
-              ) : null}*/}
-
             </div>
           </div>
         </aside>
 
         <div className="flex-1">
           <div className="space-y-2">
-            <div className="text-sm font-medium">
-              SOUNDWAVE RENDER
-            </div>
+            <div className="text-sm font-medium">SOUNDWAVE RENDER</div>
             <div className="text-xs text-slate-400">
-              Reproduce el audio y el trazo avanza en 360 grados según el
-              progreso temporal.
+              Reproduce el audio y el trazo avanza en 360 grados según el progreso temporal.
             </div>
           </div>
 
@@ -1370,11 +1193,10 @@ export default function AudioVisualizer() {
             <audio ref={audioRef} className="hidden" />
           </div>
           <div className="mt-2 text-xs text-slate-400">
-            Consejo: selecciona fondo color verde pastel para fondo trasparente tipo croma            
+            Consejo: selecciona fondo color verde pastel para fondo trasparente tipo croma (si no utilizas imagen).
           </div>
         </div>
       </div>
     </section>
   );
 }
-
