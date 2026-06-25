@@ -119,9 +119,19 @@ export default function AudioVisualizer() {
 
   const [isExporting, setIsExporting] = useState(false);
 
+  // Background mode: color | image | fractal (mutually exclusive)
+  const [bgMode, setBgMode] = useState<"color" | "image" | "fractal">("color");
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [presetSavedKeys, setPresetSavedKeys] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("quickPreset_saved");
+      return new Set(stored ? JSON.parse(stored) : []);
+    } catch { return new Set(); }
+  });
+
   // Collapsible sections (Fondo and Título start collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(["bg", "title", "fractal"])
+    () => new Set(["bg", "title"])
   );
   const toggleSection = useCallback((name: string) => {
     setCollapsedSections((prev) => {
@@ -153,8 +163,9 @@ export default function AudioVisualizer() {
 
   // --- VISUAL EFFECTS ---
   const [glowIntensity, setGlowIntensity] = useState(0.4);
-  const [showParticles, setShowParticles] = useState(true);
+  const [showParticles, setShowParticles] = useState(false);
   const [particleColor, setParticleColor] = useState("#a78bfa");
+  const [particleOpacity, setParticleOpacity] = useState(0.7);
   const [waveGradientMode, setWaveGradientMode] = useState<"solid" | "gradient" | "rainbow">("solid");
   const [gradColor1, setGradColor1] = useState("#6366f1");
   const [gradColor2, setGradColor2] = useState("#a855f7");
@@ -221,6 +232,7 @@ export default function AudioVisualizer() {
     songTitle,
     titleColor,
     glowIntensity,
+    particleOpacity,
     waveGradientMode,
     gradColor1,
     gradColor2,
@@ -252,16 +264,17 @@ export default function AudioVisualizer() {
   useEffect(() => {
     paramsRef.current = {
       radiusRatio, intensity, strokeWidth, waveColor, bgColor,
-      songTitle, titleColor, glowIntensity, waveGradientMode, gradColor1, gradColor2,
+      songTitle, titleColor, glowIntensity, particleOpacity, waveGradientMode, gradColor1, gradColor2,
       fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
       spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
       mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
     };
     bgImageRef.current = bgImage;
+    redrawBackgroundCanvas();
   }, [
     radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage,
-    songTitle, titleColor, glowIntensity, waveGradientMode, gradColor1, gradColor2,
+    songTitle, titleColor, glowIntensity, particleOpacity, waveGradientMode, gradColor1, gradColor2,
     fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
     spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
@@ -272,10 +285,25 @@ export default function AudioVisualizer() {
   const applyBgPreset = useCallback((id: string) => {
     const preset = bgPresets.find(p => p.id === id);
     if (!preset) return;
+    setBgMode("color");
+    setFractalEnabled(false);
     setActiveBgPreset(id);
     setBgImage(null);
     bgImageRef.current = null;
     setBgColor(preset.color);
+  }, []);
+
+  const handleBgModeChange = useCallback((mode: "color" | "image" | "fractal") => {
+    setBgMode(mode);
+    if (mode === "color") {
+      setFractalEnabled(false);
+      setBgImage(null);
+      bgImageRef.current = null;
+    } else if (mode === "image") {
+      setFractalEnabled(false);
+    } else {
+      setFractalEnabled(true);
+    }
   }, []);
 
   // Live preview: if parameters change while previewing, we clear the canvas
@@ -376,6 +404,7 @@ export default function AudioVisualizer() {
     const fc = fractalCanvasRef.current;
     const fctx = fractalCtxRef.current;
     if (!fc || !fctx) return;
+    if (drawingModeRef.current === "record") return;
     if (w === undefined || h === undefined) {
       const dpr = window.devicePixelRatio || 1;
       const rect = fc.getBoundingClientRect();
@@ -392,8 +421,7 @@ export default function AudioVisualizer() {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const size = Math.floor((resMap[resolution] || 1080) * dpr);
+    const size = Math.floor(resMap[resolution] || 1080);
     if (canvas.width !== size || canvas.height !== size) {
       canvas.width = size;
       canvas.height = size;
@@ -554,11 +582,16 @@ export default function AudioVisualizer() {
 
     const tipRadius = Math.max(2, Math.min(10, (ctx.lineWidth || 4) * 0.9));
 
-    // Limpiar el cursor anterior (canvas transparente, usamos clearRect)
-    if (lastTipRef.current) {
+    // Limpiar el cursor anterior solo si partículas está activo
+    if (lastTipRef.current && showParticles) {
       const prev = lastTipRef.current;
       const r = prev.r + 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(prev.x, prev.y, r, 0, TWO_PI);
+      ctx.clip();
       ctx.clearRect(prev.x - r, prev.y - r, r * 2, r * 2);
+      ctx.restore();
     }
 
     ctx.save();
@@ -612,6 +645,7 @@ export default function AudioVisualizer() {
   const updateAndDrawParticles = (ctx: CanvasRenderingContext2D) => {
     const dt = 1 / 60;
     const particles = particlesRef.current;
+    const opacity = paramsRef.current.particleOpacity ?? 0.7;
     ctx.save();
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
@@ -619,7 +653,7 @@ export default function AudioVisualizer() {
       p.y += p.vy;
       p.life -= dt / p.maxLife;
       if (p.life <= 0) { particles.splice(i, 1); continue; }
-      ctx.globalAlpha = p.life * 0.7;
+      ctx.globalAlpha = p.life * opacity;
       ctx.fillStyle = particleColor;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * p.life, 0, TWO_PI);
@@ -787,7 +821,7 @@ export default function AudioVisualizer() {
     const now = performance.now() / 1000;
 
     const count = p.rippleRingCount;
-    const speed = p.rippleSpeed * (p.fractalAudioReactive ? (0.5 + amp * 2) : 1);
+    const speed = p.rippleSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.5) : 1);
     const amplitude = p.rippleAmplitude * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
     const thickness = p.rippleThickness;
 
@@ -831,7 +865,7 @@ export default function AudioVisualizer() {
     const density = p.spiralDensity;
     const now = performance.now() / 1000;
 
-    const rotationSpeed = p.spiralRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 1.5) : 1);
+    const rotationSpeed = p.spiralRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.375) : 1);
     const scale = p.spiralTightness * maxR * 0.06 * (p.fractalAudioReactive ? (0.6 + amp * 0.8) : 1);
     const dotSize = p.spiralDotSize * (p.fractalAudioReactive ? (0.5 + amp * 0.8) : 1);
     const rotationOffset = now * rotationSpeed;
@@ -868,7 +902,7 @@ export default function AudioVisualizer() {
     const complexity = p.mandalaComplexity;
     const now = performance.now() / 1000;
 
-    const rotationSpeed = p.mandalaRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 1.5) : 1);
+    const rotationSpeed = p.mandalaRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.375) : 1);
     const lineWidth = p.mandalaLineWidth;
 
     ctx.save();
@@ -925,6 +959,39 @@ export default function AudioVisualizer() {
       case "ripple": drawRippleFractal(ctx, canvas, amp); break;
       case "spiral": drawSpiralFractal(ctx, canvas, amp); break;
       case "mandala": drawMandalaFractal(ctx, canvas, amp); break;
+    }
+  };
+
+  const redrawBackgroundCanvas = () => {
+    const fc = fractalCanvasRef.current;
+    const fctx = fractalCtxRef.current;
+    if (!fc || !fctx) return;
+    if (drawingModeRef.current !== "idle") return;
+
+    syncFractalCanvasSize();
+    fctx.clearRect(0, 0, fc.width, fc.height);
+
+    const p = paramsRef.current;
+    const img = bgImageRef.current;
+
+    if (p.fractalEnabled && p.fractalLayerMode === "replace") {
+      drawFractalBackground(fctx, fc);
+    } else {
+      if (img) {
+        const scale = Math.max(fc.width / img.width, fc.height / img.height);
+        const x = (fc.width - img.width * scale) / 2;
+        const y = (fc.height - img.height * scale) / 2;
+        fctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+      } else {
+        fctx.fillStyle = p.bgColor;
+        fctx.fillRect(0, 0, fc.width, fc.height);
+      }
+      if (p.fractalEnabled && p.fractalLayerMode === "overlay") {
+        fctx.save();
+        fctx.globalAlpha = p.fractalOpacity;
+        drawFractalBackground(fctx, fc);
+        fctx.restore();
+      }
     }
   };
 
@@ -995,8 +1062,11 @@ export default function AudioVisualizer() {
       lastDrawnPointIndexRef.current = 0;
       lastCurvePointRef.current = getPointXY(0);
     } else if (shouldFade) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
       ctx.fillStyle = 'rgba(0,0,0,0.02)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
     } else if (isRecording) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
@@ -1173,48 +1243,24 @@ export default function AudioVisualizer() {
 
       const canvasStream = canvasCaptureStream.call(canvas, 30);
 
-      // --- CAMBIO ESTRUCTURAL: SE AGREGA CAPTURA GARANTIZADA USANDO WEB AUDIO API ---
-      let mediaStream = canvasStream;
-      
-      try {
-        const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
-        const audioCtx = new AudioContextCtor();
-        
-        // Reanudamos el contexto en caso de políticas estrictas del navegador
-        if (audioCtx.state === "suspended") {
-          await audioCtx.resume();
-        }
+      // Reproducimos primero para tener pistas de audio disponibles
+      await audioEl.play();
 
-        // Creamos la conexión de nodos de audio
-        const source = audioCtx.createMediaElementSource(audioEl);
-        const dest = audioCtx.createMediaStreamDestination();
-        
-        source.connect(dest);
-        source.connect(audioCtx.destination); // Permite al usuario seguir escuchándolo en vivo
-
-        const audioTracks = dest.stream.getAudioTracks();
-        if (audioTracks.length > 0) {
-          mediaStream = new MediaStream([
-            ...canvasStream.getVideoTracks(),
-            ...audioTracks,
-          ]);
-        }
-      } catch (audioErr) {
-        console.warn("Fallo Web Audio API, recurriendo a captureStream directo:", audioErr);
-        const audioCaptureFn = (audioEl as any).captureStream || (audioEl as any).webkitCaptureStream;
-        if (typeof audioCaptureFn === "function") {
-          try {
-            const audioStream = audioCaptureFn.call(audioEl);
-            const audioTracks = audioStream.getAudioTracks();
-            if (audioTracks.length > 0) {
-              mediaStream = new MediaStream([
-                ...canvasStream.getVideoTracks(),
-                ...audioTracks,
-              ]);
-            }
-          } catch (e) {
-            console.error(e);
+      // Capturamos audio desde el elemento en reproducción
+      let mediaStream: MediaStream = canvasStream;
+      const audioCaptureFn = (audioEl as any).captureStream as (() => MediaStream) | undefined;
+      if (typeof audioCaptureFn === "function") {
+        try {
+          const audioStream = audioCaptureFn.call(audioEl);
+          const audioTracks = audioStream.getAudioTracks();
+          if (audioTracks.length > 0) {
+            mediaStream = new MediaStream([
+              ...canvasStream.getVideoTracks(),
+              ...audioTracks,
+            ]);
           }
+        } catch (e) {
+          console.warn("Fallo captureStream de audio:", e);
         }
       }
 
@@ -1259,13 +1305,11 @@ export default function AudioVisualizer() {
         finish();
       };
 
-      recorder.startRecording();
-
       audioEl.onended = () => {
         finish();
       };
 
-      await audioEl.play();
+      recorder.startRecording();
       startAnimation("record");
     } catch (e: any) {
       setIsExporting(false);
@@ -1289,6 +1333,8 @@ export default function AudioVisualizer() {
       setTimeout(() => clearCanvasSolid(), 50);
       return;
     }
+    setBgMode("image");
+    setFractalEnabled(false);
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
@@ -1302,6 +1348,190 @@ export default function AudioVisualizer() {
     reader.readAsDataURL(file);
   };
 
+  const loadSampleBgImage = useCallback(() => {
+    const loadFallback = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 640;
+      const c = canvas.getContext("2d")!;
+      const grad = c.createLinearGradient(0, 0, 640, 640);
+      grad.addColorStop(0, "#1e1b4b");
+      grad.addColorStop(0.5, "#0f172a");
+      grad.addColorStop(1, "#1e1b4b");
+      c.fillStyle = grad;
+      c.fillRect(0, 0, 640, 640);
+      c.strokeStyle = "rgba(99,102,241,0.15)";
+      c.lineWidth = 2;
+      for (let i = -640; i < 1280; i += 40) {
+        c.beginPath();
+        c.moveTo(i, 0);
+        c.lineTo(i + 640, 640);
+        c.stroke();
+      }
+      c.fillStyle = "rgba(99,102,241,0.5)";
+      c.font = "bold 48px sans-serif";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText("MUESTRA", 320, 320);
+      const img = new Image();
+      img.onload = () => {
+        setBgImage(img);
+        bgImageRef.current = img;
+        clearCanvasSolid();
+      };
+      img.src = canvas.toDataURL();
+    };
+    const img = new Image();
+    img.onload = () => {
+      setBgImage(img);
+      bgImageRef.current = img;
+      clearCanvasSolid();
+    };
+    img.onerror = loadFallback;
+    img.src = "/fondo_muestra.jpg";
+  }, []);
+
+  const saveCurrentToActivePreset = useCallback(() => {
+    const key = activePreset;
+    if (!key) return;
+    const data = {
+      bgMode, bgColor, activeBgPreset,
+      fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
+      rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
+      spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
+      mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+      waveColor, waveGradientMode, gradColor1, gradColor2,
+      glowIntensity, showParticles, particleColor, particleOpacity,
+      radiusRatio, intensity, strokeWidth,
+      songTitle, titleColor,
+    };
+    localStorage.setItem(`quickPreset_${key}`, JSON.stringify(data));
+    setPresetSavedKeys((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      localStorage.setItem("quickPreset_saved", JSON.stringify([...next]));
+      return next;
+    });
+  }, [activePreset, bgMode, bgColor, activeBgPreset,
+    fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
+    rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
+    spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
+    mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+    waveColor, waveGradientMode, gradColor1, gradColor2,
+    glowIntensity, showParticles, particleColor, particleOpacity,
+    radiusRatio, intensity, strokeWidth,
+    songTitle, titleColor]);
+
+  const loadSavedPreset = useCallback((key: string) => {
+    const raw = localStorage.getItem(`quickPreset_${key}`);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }, []);
+
+  const applyQuickPreset = useCallback((key: string) => {
+    const expandBg = () => {
+      setCollapsedSections((prev) => {
+        const next = new Set(prev);
+        next.delete("bg");
+        return next;
+      });
+    };
+    setActivePreset(key);
+
+    const saved = loadSavedPreset(key);
+    if (saved) {
+      expandBg();
+      setBgMode(saved.bgMode);
+      setBgColor(saved.bgColor);
+      setActiveBgPreset(saved.activeBgPreset ?? null);
+      setFractalEnabled(saved.fractalEnabled);
+      setFractalType(saved.fractalType);
+      setFractalLayerMode(saved.fractalLayerMode);
+      setFractalOpacity(saved.fractalOpacity);
+      setFractalAudioReactive(saved.fractalAudioReactive);
+      setRippleRingCount(saved.rippleRingCount);
+      setRippleSpeed(saved.rippleSpeed);
+      setRippleAmplitude(saved.rippleAmplitude);
+      setRippleThickness(saved.rippleThickness);
+      setRippleColor1(saved.rippleColor1);
+      setRippleColor2(saved.rippleColor2);
+      setSpiralDensity(saved.spiralDensity);
+      setSpiralRotationSpeed(saved.spiralRotationSpeed);
+      setSpiralTightness(saved.spiralTightness);
+      setSpiralDotSize(saved.spiralDotSize);
+      setSpiralColor1(saved.spiralColor1);
+      setSpiralColor2(saved.spiralColor2);
+      setMandalaSegments(saved.mandalaSegments);
+      setMandalaRotationSpeed(saved.mandalaRotationSpeed);
+      setMandalaComplexity(saved.mandalaComplexity);
+      setMandalaLineWidth(saved.mandalaLineWidth);
+      setMandalaColor1(saved.mandalaColor1);
+      setMandalaColor2(saved.mandalaColor2);
+      setWaveColor(saved.waveColor);
+      setWaveGradientMode(saved.waveGradientMode);
+      setGradColor1(saved.gradColor1);
+      setGradColor2(saved.gradColor2);
+      setGlowIntensity(saved.glowIntensity);
+      setShowParticles(saved.showParticles);
+      setParticleColor(saved.particleColor);
+      setParticleOpacity(saved.particleOpacity);
+      setRadiusRatio(saved.radiusRatio);
+      setIntensity(saved.intensity);
+      setStrokeWidth(saved.strokeWidth);
+      setSongTitle(saved.songTitle);
+      setTitleColor(saved.titleColor);
+      if (saved.bgMode === "image") {
+        loadSampleBgImage();
+      } else if (saved.bgMode === "color") {
+        setBgImage(null);
+        bgImageRef.current = null;
+      }
+      return;
+    }
+
+    switch (key) {
+      case "croma":
+        expandBg();
+        setBgMode("color");
+        setBgColor("#00d64f");
+        setWaveColor("#ffffff");
+        setFractalEnabled(false);
+        setBgImage(null);
+        bgImageRef.current = null;
+        break;
+      case "fractal1":
+        expandBg();
+        setBgMode("fractal");
+        setFractalEnabled(true);
+        setFractalType("ripple");
+        setFractalLayerMode("overlay");
+        setFractalAudioReactive(true);
+        break;
+      case "fractal2":
+        expandBg();
+        setBgMode("fractal");
+        setFractalEnabled(true);
+        setFractalType("mandala");
+        setFractalLayerMode("overlay");
+        setFractalOpacity(0.7);
+        setFractalAudioReactive(true);
+        break;
+      case "fractal3":
+        expandBg();
+        setBgMode("fractal");
+        setFractalEnabled(true);
+        setFractalType("spiral");
+        setFractalLayerMode("overlay");
+        setFractalAudioReactive(true);
+        break;
+      case "image":
+        expandBg();
+        setBgMode("image");
+        setFractalEnabled(false);
+        loadSampleBgImage();
+        break;
+    }
+  }, [loadSavedPreset, loadSampleBgImage]);
 
   const onPickFile = async (file: File | null) => {
     setError(null);
@@ -1365,8 +1595,42 @@ export default function AudioVisualizer() {
   return (
     <section className="glass glass-hover animate-fade-in overflow-hidden p-4">
       <div className="flex flex-col gap-4 md:flex-row">
-        <aside className="w-full md:w-72 space-y-1 max-h-[calc(100vh-10rem)] overflow-y-auto">
+        <aside className="w-full md:w-72 space-y-1 max-h-[calc(100vh-10rem)] overflow-y-auto bg-slate-950/80 rounded-xl p-2">
           <div className="space-y-2 pr-1">
+            {/* Quick presets */}
+            {(() => {
+              const presets = [
+                { label: "Croma", key: "croma" },
+                { label: "Imagen", key: "image" },
+                { label: "Fractal 1", key: "fractal1" },
+                { label: "Fractal 2", key: "fractal2" },
+                { label: "Fractal 3", key: "fractal3" },
+              ];
+              return (
+                <>
+                  <div className="grid grid-cols-5 gap-1">
+                    {presets.map((p) => (
+                      <button key={p.key} type="button" onClick={() => applyQuickPreset(p.key)}
+                        className={`rounded-lg px-1 py-0.5 text-[9px] font-medium transition-all duration-200 ${
+                          activePreset === p.key
+                            ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
+                            : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-indigo-500/50 hover:text-indigo-300"
+                        }`}
+                      >
+                        {p.label}{presetSavedKeys.has(p.key) ? "*" : ""}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={saveCurrentToActivePreset}
+                    disabled={!activePreset}
+                    className="w-full rounded-lg px-1 py-0.5 text-[9px] font-medium bg-slate-800/60 text-amber-400 border border-slate-700/50 hover:border-amber-500/50 hover:text-amber-300 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Guardar preset
+                  </button>
+                </>
+              );
+            })()}
+
             <CollapsibleSection
               title="Audio"
               collapsed={collapsedSections.has("audio")}
@@ -1385,26 +1649,6 @@ export default function AudioVisualizer() {
                   <div className="text-[10px] text-slate-400">{fileMeta}</div>
                 ) : (
                   <div className="text-[10px] text-slate-400">Selecciona un archivo de audio</div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-1 pt-1">
-                <div className="text-[10px] font-medium text-slate-400 tracking-wide">Imagen fondo (opcional)</div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={isDecoding || isRecording || isPreviewing}
-                  className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-[10px] text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-2 file:py-1 file:text-[10px] file:font-medium file:text-cyan-200 hover:file:bg-cyan-500/30"
-                  onChange={(e) => onPickBgImage(e.target.files?.[0] ?? null)}
-                />
-                {bgImage && (
-                  <button
-                    type="button"
-                    onClick={() => onPickBgImage(null)}
-                    className="self-start rounded-lg px-1.5 py-0.5 text-[10px] text-rose-400 transition-all duration-200 hover:bg-rose-950/30"
-                  >
-                    Remover
-                  </button>
                 )}
               </div>
             </CollapsibleSection>
@@ -1439,16 +1683,10 @@ export default function AudioVisualizer() {
                 <input type="range" min={1} max={10} step={0.5} value={strokeWidth} onChange={(e) => setStrokeWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
               </label>
 
-              <div className="grid grid-cols-2 gap-1.5 pt-1">
-                <label className="block">
-                  <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color</div>
-                  <input type="color" value={waveColor} onChange={(e) => setWaveColor(e.target.value)} disabled={isDecoding || isRecording} className="mt-0.5 h-7 w-full cursor-pointer rounded-lg" />
-                </label>
-                <label className="block">
-                  <div className="text-[10px] font-medium text-slate-400 tracking-wide">Fondo</div>
-                  <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} disabled={isDecoding || isRecording || bgImage !== null} className="mt-0.5 h-7 w-full cursor-pointer rounded-lg disabled:opacity-30" />
-                </label>
-              </div>
+              <label className="block pt-1">
+                <div className="text-[10px] font-medium text-slate-400 tracking-wide pb-0.5">Color</div>
+                <input type="color" value={waveColor} onChange={(e) => setWaveColor(e.target.value)} disabled={isDecoding || isRecording} className="mt-0.5 h-7 w-full cursor-pointer rounded-lg" />
+              </label>
 
               <div className="pt-1">
                 <div className="text-[10px] font-medium text-slate-400 tracking-wide pb-0.5">Gradiente</div>
@@ -1485,56 +1723,20 @@ export default function AudioVisualizer() {
                 Partículas
               </label>
               {showParticles && (
-                <label className="block pt-0.5">
-                  <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color partículas</div>
-                  <input type="color" value={particleColor} onChange={(e) => setParticleColor(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
-                </label>
+                <>
+                  <label className="block pt-0.5">
+                    <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color partículas</div>
+                    <input type="color" value={particleColor} onChange={(e) => setParticleColor(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                  </label>
+                  <label className="block pt-0.5">
+                    <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                      <span>Opacidad</span>
+                      <span className="tabular-nums text-slate-300">{particleOpacity.toFixed(2)}</span>
+                    </div>
+                    <input type="range" min={0} max={1} step={0.05} value={particleOpacity} onChange={(e) => setParticleOpacity(parseFloat(e.target.value))} className="mt-0.5 w-full" />
+                  </label>
+                </>
               )}
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Exportar"
-              collapsed={collapsedSections.has("export")}
-              onToggle={() => toggleSection("export")}
-              icon={<div className="h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />}
-            >
-              <div className="text-[10px] font-medium text-slate-400 tracking-wide pb-0.5">Resolución</div>
-              <div className="grid grid-cols-3 gap-1">
-                {(["720p", "1080p", "4K"] as const).map((r) => (
-                  <button key={r} type="button" onClick={() => setResolution(r)} disabled={isExporting || isRecording}
-                    className={`rounded-lg px-1.5 py-1 text-[10px] font-medium transition-all duration-200 ${
-                      resolution === r
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                        : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-
-              <button type="button" onClick={() => void handleGenerateAndDownloadRealtime()}
-                disabled={isDecoding || isRecording || isExporting || !audioUrl || !waveformReady}
-                className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
-              >
-                Generar y descargar video
-              </button>
-
-              <div className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-2 py-1 mt-1.5 text-[10px] leading-relaxed text-amber-300/70">
-                Mantén la pestaña en primer plano.
-              </div>
-
-              {isExporting ? (
-                <div className="pt-1">
-                  <div className="flex items-center gap-1.5 text-[10px] text-indigo-300">
-                    <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Exportando...
-                  </div>
-                </div>
-              ) : null}
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -1543,36 +1745,79 @@ export default function AudioVisualizer() {
               onToggle={() => toggleSection("bg")}
               icon={<div className="h-1 w-1 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.6)]" />}
             >
-              <div className="flex flex-wrap gap-1">
-                {bgPresets.map((p) => (
-                  <button key={p.id} type="button" onClick={() => applyBgPreset(p.id)} disabled={isDecoding || isRecording}
-                    className={`rounded-lg px-2 py-0.5 text-[10px] font-medium transition-all duration-200 ${
-                      activeBgPreset === p.id
+              {/* Mode selector: Color | Imagen | Fractal */}
+              <div className="grid grid-cols-3 gap-1 pb-1.5">
+                {(["color", "image", "fractal"] as const).map((mode) => (
+                  <button key={mode} type="button" onClick={() => handleBgModeChange(mode)}
+                    disabled={isDecoding || isRecording}
+                    className={`rounded-lg px-1.5 py-1 text-[10px] font-medium transition-all duration-200 ${
+                      bgMode === mode
                         ? "bg-violet-500/20 text-violet-300 border border-violet-500/40"
                         : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
                     }`}
                   >
-                    {p.label}
+                    {mode === "color" ? "Color" : mode === "image" ? "Imagen" : "Fractal"}
                   </button>
                 ))}
               </div>
-            </CollapsibleSection>
 
-            <CollapsibleSection
-              title="Fractal"
-              collapsed={collapsedSections.has("fractal")}
-              onToggle={() => toggleSection("fractal")}
-              icon={<div className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(192,38,211,0.6)]" />}
-            >
-              <label className="flex cursor-pointer items-center gap-1.5 pb-1 text-[10px] text-slate-400 transition-all duration-200 hover:text-slate-300">
-                <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)}
-                  disabled={isDecoding || isRecording} className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500"
-                />
-                Activar fractal
-              </label>
+              {/* COLOR sub-menu */}
+              <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
+                bgMode === "color" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+              }`}>
+                <div className="pt-0.5 space-y-1">
+                  <div className="flex flex-wrap gap-1">
+                    {bgPresets.map((p) => (
+                      <button key={p.id} type="button" onClick={() => applyBgPreset(p.id)} disabled={isDecoding || isRecording}
+                        className={`rounded-lg px-2 py-0.5 text-[10px] font-medium transition-all duration-200 ${
+                          activeBgPreset === p.id
+                            ? "bg-violet-500/20 text-violet-300 border border-violet-500/40"
+                            : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="block">
+                    <div className="text-[10px] font-medium text-slate-400 tracking-wide pb-0.5">Personalizado</div>
+                    <input type="color" value={bgColor} onChange={(e) => { setBgColor(e.target.value); setActiveBgPreset(null); }}
+                      disabled={isDecoding || isRecording} className="h-7 w-full cursor-pointer rounded-lg" />
+                  </label>
+                </div>
+              </div>
 
-              {fractalEnabled && (
-                <div className="space-y-1">
+              {/* IMAGE sub-menu */}
+              <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
+                bgMode === "image" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+              }`}>
+                <div className="pt-0.5 space-y-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isDecoding || isRecording || isPreviewing}
+                    className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-[10px] text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-2 file:py-1 file:text-[10px] file:font-medium file:text-cyan-200 hover:file:bg-cyan-500/30"
+                    onChange={(e) => onPickBgImage(e.target.files?.[0] ?? null)}
+                  />
+                  {bgImage && (
+                    <button
+                      type="button"
+                      onClick={() => onPickBgImage(null)}
+                      className="self-start rounded-lg px-1.5 py-0.5 text-[10px] text-rose-400 transition-all duration-200 hover:bg-rose-950/30"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* FRACTAL sub-menu */}
+              <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
+                bgMode === "fractal" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+              }`}>
+                <div className="pt-0.5 space-y-1">
+                  <div className="text-[10px] text-slate-500 italic">Fractal activado</div>
+
                   <select value={fractalType} onChange={(e) => setFractalType(e.target.value as any)}
                     disabled={isDecoding || isRecording}
                     className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[10px] text-slate-200 focus:border-fuchsia-500/50 focus:outline-none"
@@ -1742,7 +1987,7 @@ export default function AudioVisualizer() {
                     </div>
                   )}
                 </div>
-              )}
+              </div>
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -1796,6 +2041,51 @@ export default function AudioVisualizer() {
                 {recordError}
               </div>
             ) : null}
+
+            <CollapsibleSection
+              title="Exportar"
+              collapsed={collapsedSections.has("export")}
+              onToggle={() => toggleSection("export")}
+              icon={<div className="h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />}
+            >
+              <div className="text-[10px] font-medium text-slate-400 tracking-wide pb-0.5">Resolución</div>
+              <div className="grid grid-cols-3 gap-1">
+                {(["720p", "1080p", "4K"] as const).map((r) => (
+                  <button key={r} type="button" onClick={() => setResolution(r)} disabled={isExporting || isRecording}
+                    className={`rounded-lg px-1.5 py-1 text-[10px] font-medium transition-all duration-200 ${
+                      resolution === r
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                        : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+
+              <button type="button" onClick={() => void handleGenerateAndDownloadRealtime()}
+                disabled={isDecoding || isRecording || isExporting || !audioUrl || !waveformReady}
+                className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
+              >
+                Generar y descargar video
+              </button>
+
+              <div className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-2 py-1 mt-1.5 text-[10px] leading-relaxed text-amber-300/70">
+                Mantén la pestaña en primer plano.
+              </div>
+
+              {isExporting ? (
+                <div className="pt-1">
+                  <div className="flex items-center gap-1.5 text-[10px] text-indigo-300">
+                    <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Exportando...
+                  </div>
+                </div>
+              ) : null}
+            </CollapsibleSection>
           </div>
         </aside>
 
