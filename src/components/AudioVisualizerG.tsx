@@ -1,34 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordRTC from "recordrtc";
 
 function CollapsibleSection({
   title,
   icon,
-  defaultOpen = true,
   collapsed,
   onToggle,
   children,
 }: {
   title: string;
-  icon?: React.ReactNode;
-  defaultOpen?: boolean;
+  icon?: ReactNode;
   collapsed: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div>
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-2 py-1 text-left"
+        className="flex w-full items-center gap-1.5 py-0.5 text-left"
       >
         {icon}
-        <span className="text-xs font-semibold tracking-wider text-slate-400 uppercase flex-1">
+        <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase flex-1">
           {title}
         </span>
         <svg
-          className={`h-3 w-3 text-slate-500 transition-transform duration-200 ${
+          className={`h-2.5 w-2.5 text-slate-500 transition-transform duration-200 ${
             collapsed ? "" : "rotate-90"
           }`}
           fill="none"
@@ -40,11 +38,11 @@ function CollapsibleSection({
         </svg>
       </button>
       <div
-        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+        className={`overflow-hidden transition-all duration-250 ease-in-out ${
           collapsed ? "max-h-0 opacity-0" : "max-h-[2000px] opacity-100"
         }`}
       >
-        <div className="pt-1">{children}</div>
+        <div className="pt-0.5">{children}</div>
       </div>
     </div>
   );
@@ -83,6 +81,9 @@ export default function AudioVisualizer() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
+  const fractalCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fractalCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Waveform (decoded) for deterministic circular mapping.
@@ -95,6 +96,10 @@ export default function AudioVisualizer() {
   const precomputedSinRef = useRef<Float32Array | null>(null);
   const sampleStepRef = useRef<number>(1);
   const pointCountRef = useRef<number>(0);
+
+  // Precomputed spiral geometry
+  const spiralAnglesRef = useRef<Float32Array | null>(null);
+  const spiralRadiiRef = useRef<Float32Array | null>(null);
 
   // Drawing state (refs to avoid re-renders during animation).
   const rafRef = useRef<number | null>(null);
@@ -114,9 +119,9 @@ export default function AudioVisualizer() {
 
   const [isExporting, setIsExporting] = useState(false);
 
-  // Collapsible sections
+  // Collapsible sections (Fondo and Título start collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set()
+    () => new Set(["bg", "title", "fractal"])
   );
   const toggleSection = useCallback((name: string) => {
     setCollapsedSections((prev) => {
@@ -131,7 +136,6 @@ export default function AudioVisualizer() {
   const [songTitle, setSongTitle] = useState("");
   const [titleColor, setTitleColor] = useState("#ffffff");
 
-
   // UI / audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioObjectUrlRef = useRef<string | null>(null);
@@ -142,6 +146,60 @@ export default function AudioVisualizer() {
   const [waveformReady, setWaveformReady] = useState(false);
   const [isLoopingUI, setIsLoopingUI] = useState(true);
   const [isPreviewing, setIsPreviewing] = useState(false);
+
+  // --- RESOLUTION ---
+  const [resolution, setResolution] = useState<"720p" | "1080p" | "4K">("1080p");
+  const resMap: Record<string, number> = { "720p": 720, "1080p": 1080, "4K": 2160 };
+
+  // --- VISUAL EFFECTS ---
+  const [glowIntensity, setGlowIntensity] = useState(0.4);
+  const [showParticles, setShowParticles] = useState(true);
+  const [particleColor, setParticleColor] = useState("#a78bfa");
+  const [waveGradientMode, setWaveGradientMode] = useState<"solid" | "gradient" | "rainbow">("solid");
+  const [gradColor1, setGradColor1] = useState("#6366f1");
+  const [gradColor2, setGradColor2] = useState("#a855f7");
+
+  // --- BACKGROUND PRESETS ---
+  const [activeBgPreset, setActiveBgPreset] = useState<string | null>(null);
+  const bgPresets = [
+    { id: "dark", label: "Oscuro", color: "#020617" },
+    { id: "purple", label: "Púrpura", color: "#1e1b4b" },
+    { id: "cyan", label: "Cian", color: "#164e63" },
+    { id: "emerald", label: "Esmeralda", color: "#064e3b" },
+    { id: "warm", label: "Cálido", color: "#451a03" },
+  ];
+
+  // --- FRACTAL ---
+  const [fractalEnabled, setFractalEnabled] = useState(false);
+  const [fractalType, setFractalType] = useState<"ripple" | "spiral" | "mandala">("ripple");
+  const [fractalLayerMode, setFractalLayerMode] = useState<"replace" | "overlay">("overlay");
+  const [fractalOpacity, setFractalOpacity] = useState(0.8);
+  const [fractalAudioReactive, setFractalAudioReactive] = useState(true);
+
+  const [rippleRingCount, setRippleRingCount] = useState(8);
+  const [rippleSpeed, setRippleSpeed] = useState(1);
+  const [rippleAmplitude, setRippleAmplitude] = useState(20);
+  const [rippleThickness, setRippleThickness] = useState(1.5);
+  const [rippleColor1, setRippleColor1] = useState("#6366f1");
+  const [rippleColor2, setRippleColor2] = useState("#a855f7");
+
+  const [spiralDensity, setSpiralDensity] = useState(200);
+  const [spiralRotationSpeed, setSpiralRotationSpeed] = useState(0.8);
+  const [spiralTightness, setSpiralTightness] = useState(0.5);
+  const [spiralDotSize, setSpiralDotSize] = useState(2);
+  const [spiralColor1, setSpiralColor1] = useState("#6366f1");
+  const [spiralColor2, setSpiralColor2] = useState("#06b6d4");
+
+  const [mandalaSegments, setMandalaSegments] = useState(8);
+  const [mandalaRotationSpeed, setMandalaRotationSpeed] = useState(0.6);
+  const [mandalaComplexity, setMandalaComplexity] = useState(3);
+  const [mandalaLineWidth, setMandalaLineWidth] = useState(1.5);
+  const [mandalaColor1, setMandalaColor1] = useState("#a78bfa");
+  const [mandalaColor2, setMandalaColor2] = useState("#f472b6");
+
+  // --- WAVEFORM PREVIEW ---
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const previewCtxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   // --- TELEMETRÍA DE IMAGEN DE FONDO ---
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
@@ -162,12 +220,63 @@ export default function AudioVisualizer() {
     bgColor,
     songTitle,
     titleColor,
+    glowIntensity,
+    waveGradientMode,
+    gradColor1,
+    gradColor2,
+    fractalEnabled,
+    fractalType,
+    fractalLayerMode,
+    fractalOpacity,
+    fractalAudioReactive,
+    rippleRingCount,
+    rippleSpeed,
+    rippleAmplitude,
+    rippleThickness,
+    rippleColor1,
+    rippleColor2,
+    spiralDensity,
+    spiralRotationSpeed,
+    spiralTightness,
+    spiralDotSize,
+    spiralColor1,
+    spiralColor2,
+    mandalaSegments,
+    mandalaRotationSpeed,
+    mandalaComplexity,
+    mandalaLineWidth,
+    mandalaColor1,
+    mandalaColor2,
   });
 
   useEffect(() => {
-    paramsRef.current = { radiusRatio, intensity, strokeWidth, waveColor, bgColor, songTitle, titleColor };
-    bgImageRef.current = bgImage; // Sincronización crítica con el hilo de animación
-  }, [radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage, songTitle, titleColor]);
+    paramsRef.current = {
+      radiusRatio, intensity, strokeWidth, waveColor, bgColor,
+      songTitle, titleColor, glowIntensity, waveGradientMode, gradColor1, gradColor2,
+      fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
+      rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
+      spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
+      mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+    };
+    bgImageRef.current = bgImage;
+  }, [
+    radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage,
+    songTitle, titleColor, glowIntensity, waveGradientMode, gradColor1, gradColor2,
+    fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
+    rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
+    spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
+    mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+  ]);
+
+  // Apply bg preset
+  const applyBgPreset = useCallback((id: string) => {
+    const preset = bgPresets.find(p => p.id === id);
+    if (!preset) return;
+    setActiveBgPreset(id);
+    setBgImage(null);
+    bgImageRef.current = null;
+    setBgColor(preset.color);
+  }, []);
 
   // Live preview: if parameters change while previewing, we clear the canvas
   // and let the current animation frame redraw with the new style.
@@ -224,6 +333,8 @@ export default function AudioVisualizer() {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     if (!ctxRef.current) ctxRef.current = canvas.getContext("2d");
+    const fc = fractalCanvasRef.current;
+    if (fc && !fractalCtxRef.current) fractalCtxRef.current = fc.getContext("2d");
     return ctxRef.current;
   };
 
@@ -231,21 +342,7 @@ export default function AudioVisualizer() {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
-    const { bgColor } = paramsRef.current;
-    const img = bgImageRef.current;
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (img) {
-      // Algoritmo de escalado "Cover" para mantener relación de aspecto intacta
-      const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
-      const x = (canvas.width - img.width * scale) / 2;
-      const y = (canvas.height - img.height * scale) / 2;
-      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-    } else {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
     hasClearedRef.current = true;
   };
 
@@ -253,30 +350,15 @@ export default function AudioVisualizer() {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
-    const { bgColor } = paramsRef.current;
-    const img = bgImageRef.current;
-
-    if (img) {
-      // Si hay imagen de fondo, redibujamos la imagen ligeramente encima para 
-      // simular el desvanecimiento de la onda sin destruir el fondo
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
-      const x = (canvas.width - img.width * scale) / 2;
-      const y = (canvas.height - img.height * scale) / 2;
-      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = hexToRgba(bgColor, alpha);
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   };
 
   const syncCanvasSize = () => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
-    if (drawingModeRef.current === "record") return; // video size is set explicitly
+    if (drawingModeRef.current === "record") return;
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
@@ -290,15 +372,36 @@ export default function AudioVisualizer() {
     }
   };
 
-  const setCanvasVideoSquare1080 = () => {
+  const syncFractalCanvasSize = (w?: number, h?: number) => {
+    const fc = fractalCanvasRef.current;
+    const fctx = fractalCtxRef.current;
+    if (!fc || !fctx) return;
+    if (w === undefined || h === undefined) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = fc.getBoundingClientRect();
+      w = Math.max(1, Math.floor(rect.width * dpr));
+      h = Math.max(1, Math.floor(rect.height * dpr));
+    }
+    if (fc.width !== w || fc.height !== h) {
+      fc.width = w;
+      fc.height = h;
+    }
+  };
+
+  const setCanvasVideoSize = () => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    const size = Math.floor(1080 * dpr);
+    const size = Math.floor((resMap[resolution] || 1080) * dpr);
     if (canvas.width !== size || canvas.height !== size) {
       canvas.width = size;
       canvas.height = size;
+    }
+    const fc = fractalCanvasRef.current;
+    if (fc && (fc.width !== size || fc.height !== size)) {
+      fc.width = size;
+      fc.height = size;
     }
   };
 
@@ -418,46 +521,6 @@ export default function AudioVisualizer() {
     };
   };
 
-  const drawAdditionalPath = (fromPoint: number, toPoint: number) => {
-    const ctx = ctxRef.current;
-    const canvas = canvasRef.current;
-    const monoSamples = monoSamplesRef.current;
-    const cosArr = precomputedCosRef.current;
-    const sinArr = precomputedSinRef.current;
-    if (!ctx || !canvas || !monoSamples || !cosArr || !sinArr) return;
-    if (toPoint <= fromPoint) return;
-
-    const { strokeWidth, waveColor } = paramsRef.current;
-
-    ctx.save();
-    ctx.lineWidth = Math.max(1, strokeWidth);
-    ctx.strokeStyle = waveColor;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    let prev = lastCurvePointRef.current;
-    if (!prev) {
-      prev = getPointXY(fromPoint);
-      lastCurvePointRef.current = prev;
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(prev.x, prev.y);
-
-    for (let i = fromPoint + 1; i <= toPoint; i++) {
-      const p = getPointXY(i);
-      const midX = (prev.x + p.x) / 2;
-      const midY = (prev.y + p.y) / 2;
-      ctx.quadraticCurveTo(prev.x, prev.y, midX, midY);
-      prev = p;
-      lastCurvePointRef.current = prev;
-    }
-
-    ctx.lineTo(prev.x, prev.y);
-    ctx.stroke();
-    ctx.restore();
-  };
-
   const drawTip = (progress01: number) => {
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
@@ -491,32 +554,11 @@ export default function AudioVisualizer() {
 
     const tipRadius = Math.max(2, Math.min(10, (ctx.lineWidth || 4) * 0.9));
 
-    // Si NO hay imagen de fondo, hacemos el borrado quirúrgico del cursor anterior para evitar fantasmas
-    if (!img) {
-      if (drawingModeRef.current !== "record") {
-        const shouldFade = isLoopingUI;
-        if (!shouldFade && lastTipRef.current) {
-          const prev = lastTipRef.current;
-          ctx.save();
-          ctx.fillStyle = paramsRef.current.bgColor;
-          ctx.beginPath();
-          ctx.arc(prev.x, prev.y, prev.r + 2, 0, TWO_PI);
-          ctx.fill();
-          ctx.restore();
-        }
-      }
-
-      if (drawingModeRef.current === "record") {
-        if (lastTipRef.current) {
-          const prev = lastTipRef.current;
-          ctx.save();
-          ctx.fillStyle = paramsRef.current.bgColor;
-          ctx.beginPath();
-          ctx.arc(prev.x, prev.y, prev.r + 2, 0, TWO_PI);
-          ctx.fill();
-          ctx.restore();
-        }
-      }
+    // Limpiar el cursor anterior (canvas transparente, usamos clearRect)
+    if (lastTipRef.current) {
+      const prev = lastTipRef.current;
+      const r = prev.r + 2;
+      ctx.clearRect(prev.x - r, prev.y - r, r * 2, r * 2);
     }
 
     ctx.save();
@@ -526,6 +568,10 @@ export default function AudioVisualizer() {
     ctx.arc(x, y, tipRadius, 0, TWO_PI);
     ctx.fill();
     ctx.restore();
+
+    if (showParticles && (drawingModeRef.current === "preview" || drawingModeRef.current === "record")) {
+      emitParticles(x, y, 2);
+    }
 
     lastTipRef.current = { x, y, r: tipRadius };
   };
@@ -542,6 +588,346 @@ export default function AudioVisualizer() {
     ctx.restore();
   };
 
+  // --- PARTICLES ---
+  type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number };
+  const particlesRef = useRef<Particle[]>([]);
+
+  const emitParticles = (x: number, y: number, count: number) => {
+    const particles = particlesRef.current;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * TWO_PI;
+      const speed = 0.5 + Math.random() * 2.5;
+      particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1,
+        maxLife: 0.5 + Math.random() * 1.5,
+        size: 1 + Math.random() * 3,
+      });
+    }
+    if (particles.length > 300) particles.splice(0, particles.length - 300);
+  };
+
+  const updateAndDrawParticles = (ctx: CanvasRenderingContext2D) => {
+    const dt = 1 / 60;
+    const particles = particlesRef.current;
+    ctx.save();
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= dt / p.maxLife;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.globalAlpha = p.life * 0.7;
+      ctx.fillStyle = particleColor;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, TWO_PI);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  // --- ENHANCED DRAW WITH GLOW & GRADIENT ---
+  const drawAdditionalPath = (fromPoint: number, toPoint: number) => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    const monoSamples = monoSamplesRef.current;
+    const cosArr = precomputedCosRef.current;
+    const sinArr = precomputedSinRef.current;
+    if (!ctx || !canvas || !monoSamples || !cosArr || !sinArr) return;
+    if (toPoint <= fromPoint) return;
+
+    const { strokeWidth, waveColor, glowIntensity, waveGradientMode, gradColor1, gradColor2 } = paramsRef.current;
+
+    // Build point array for this segment
+    const points: Point[] = [];
+    let prev = lastCurvePointRef.current;
+    if (!prev) {
+      prev = getPointXY(fromPoint);
+      lastCurvePointRef.current = prev;
+    }
+    points.push(prev);
+    for (let i = fromPoint + 1; i <= toPoint; i++) {
+      const p = getPointXY(i);
+      const midX = (prev.x + p.x) / 2;
+      const midY = (prev.y + p.y) / 2;
+      points.push({ x: midX, y: midY });
+      points.push(p);
+      prev = p;
+      lastCurvePointRef.current = prev;
+    }
+
+    // Glow pass (behind)
+    if (glowIntensity > 0.01) {
+      ctx.save();
+      ctx.shadowBlur = 25 * glowIntensity;
+      ctx.shadowColor = waveColor;
+      ctx.lineWidth = Math.max(1, (strokeWidth + 2) * glowIntensity);
+      ctx.strokeStyle = waveColor;
+      ctx.globalAlpha = 0.25 * glowIntensity;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Main stroke
+    ctx.save();
+    ctx.lineWidth = Math.max(1, strokeWidth);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    if (waveGradientMode === "gradient") {
+      const grad = ctx.createLinearGradient(
+        canvas.width * 0.2, canvas.height * 0.2,
+        canvas.width * 0.8, canvas.height * 0.8
+      );
+      grad.addColorStop(0, gradColor1);
+      grad.addColorStop(1, gradColor2);
+      ctx.strokeStyle = grad;
+    } else if (waveGradientMode === "rainbow") {
+      const grad = ctx.createConicGradient(0, canvas.width / 2, canvas.height / 2);
+      for (let h = 0; h <= 360; h += 30) {
+        grad.addColorStop(h / 360, `hsl(${h}, 80%, 60%)`);
+      }
+      ctx.strokeStyle = grad;
+    } else {
+      ctx.strokeStyle = waveColor;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  // --- STATIC WAVEFORM PREVIEW ---
+  const drawStaticWaveform = () => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    const ctx = previewCtxRef.current;
+    if (!ctx) {
+      previewCtxRef.current = canvas.getContext("2d");
+      if (!previewCtxRef.current) return;
+    }
+    const c = previewCtxRef.current;
+    const monoSamples = monoSamplesRef.current;
+    const cosArr = precomputedCosRef.current;
+    const sinArr = precomputedSinRef.current;
+    if (!monoSamples || !cosArr || !sinArr) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.floor(canvas.clientWidth * dpr);
+    const h = Math.floor(canvas.clientHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    c.clearRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2, rMin = Math.min(cx, cy);
+    const step = sampleStepRef.current;
+    const totalSamples = totalSamplesRef.current;
+    if (!totalSamples) return;
+    const radiusBase = rMin * 0.4;
+    const radiusAmp = radiusBase * 0.3;
+    const pc = pointCountRef.current;
+    c.save();
+    c.strokeStyle = "#6366f1";
+    c.lineWidth = 1.5;
+    c.globalAlpha = 0.6;
+    c.beginPath();
+    for (let i = 0; i < pc; i++) {
+      const sampleIdx = Math.min(i * step, totalSamples - 1);
+      const amp = monoSamples[sampleIdx] ?? 0;
+      const r = radiusBase + amp * radiusAmp;
+      const x = cx + r * cosArr[i];
+      const y = cy + r * sinArr[i];
+      if (i === 0) c.moveTo(x, y);
+      else c.lineTo(x, y);
+    }
+    c.closePath();
+    c.stroke();
+    c.restore();
+  };
+
+  useEffect(() => {
+    if (waveformReady && previewCanvasRef.current) {
+      drawStaticWaveform();
+    }
+  }, [waveformReady, radiusRatio, intensity, waveColor]);
+
+  // --- FRACTAL BACKGROUND ---
+  const GOLDEN_ANGLE = 2.399963229728653;
+
+  const getCurrentAmplitude = () => {
+    const monoSamples = monoSamplesRef.current;
+    const audioEl = audioRef.current;
+    const totalSamples = totalSamplesRef.current;
+    const duration = durationRef.current;
+    if (!monoSamples || !audioEl || !totalSamples || !duration) return 0;
+    const progress = clamp((audioEl.currentTime || 0) / duration, 0, 1);
+    const centerIdx = Math.floor(progress * (totalSamples - 1));
+    const halfWin = 256;
+    const start = Math.max(0, centerIdx - halfWin);
+    const end = Math.min(totalSamples - 1, centerIdx + halfWin);
+    let sum = 0;
+    for (let i = start; i <= end; i++) sum += Math.abs(monoSamples[i]);
+    return sum / (end - start + 1);
+  };
+
+  const drawRippleFractal = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, amp: number) => {
+    const p = paramsRef.current;
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2, cy = h / 2;
+    const maxR = Math.min(cx, cy) * 0.95;
+    const now = performance.now() / 1000;
+
+    const count = p.rippleRingCount;
+    const speed = p.rippleSpeed * (p.fractalAudioReactive ? (0.5 + amp * 2) : 1);
+    const amplitude = p.rippleAmplitude * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
+    const thickness = p.rippleThickness;
+
+    ctx.save();
+    ctx.lineCap = "round";
+
+    for (let i = 0; i < count; i++) {
+      const t = i / Math.max(1, count - 1);
+      const baseR = maxR * (0.05 + t * 0.95);
+      const phase = now * speed * (0.8 + t * 0.4) + i * 1.5;
+      const waveFreq = 4 + i * 1.8;
+
+      ctx.lineWidth = thickness * (0.5 + t * 0.5);
+      ctx.strokeStyle = hexToRgba(
+        i % 2 === 0 ? p.rippleColor1 : p.rippleColor2,
+        0.25 + t * 0.75
+      );
+
+      const steps = Math.max(48, Math.floor(baseR * 0.12));
+      ctx.beginPath();
+      for (let j = 0; j <= steps; j++) {
+        const theta = (j / steps) * TWO_PI;
+        const r = baseR + Math.sin(theta * waveFreq + phase) * amplitude;
+        const x = cx + r * Math.cos(theta);
+        const y = cy + r * Math.sin(theta);
+        if (j === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  const drawSpiralFractal = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, amp: number) => {
+    const p = paramsRef.current;
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2, cy = h / 2;
+    const maxR = Math.min(cx, cy) * 0.95;
+
+    const density = p.spiralDensity;
+    const now = performance.now() / 1000;
+
+    const rotationSpeed = p.spiralRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 1.5) : 1);
+    const scale = p.spiralTightness * maxR * 0.06 * (p.fractalAudioReactive ? (0.6 + amp * 0.8) : 1);
+    const dotSize = p.spiralDotSize * (p.fractalAudioReactive ? (0.5 + amp * 0.8) : 1);
+    const rotationOffset = now * rotationSpeed;
+
+    ctx.save();
+
+    for (let i = 0; i < density; i++) {
+      const angle = i * GOLDEN_ANGLE + rotationOffset;
+      const r = Math.sqrt(i) * scale;
+      if (r > maxR) break;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+
+      const t = i / density;
+      ctx.fillStyle = hexToRgba(
+        t < 0.5 ? p.spiralColor1 : p.spiralColor2,
+        0.2 + t * 0.8
+      );
+      const s = Math.max(0.5, dotSize * (0.2 + t * 0.8));
+      ctx.beginPath();
+      ctx.arc(x, y, s, 0, TWO_PI);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  const drawMandalaFractal = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, amp: number) => {
+    const p = paramsRef.current;
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2, cy = h / 2;
+    const maxR = Math.min(cx, cy) * 0.9;
+
+    const segments = p.mandalaSegments;
+    const complexity = p.mandalaComplexity;
+    const now = performance.now() / 1000;
+
+    const rotationSpeed = p.mandalaRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 1.5) : 1);
+    const lineWidth = p.mandalaLineWidth;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(now * rotationSpeed);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const segAngle = TWO_PI / segments;
+
+    for (let s = 0; s < segments; s++) {
+      ctx.save();
+      ctx.rotate(s * segAngle);
+
+      for (let c = 0; c < complexity; c++) {
+        const t = (c + 1) / complexity;
+        const r = maxR * t;
+        const halfArc = (segAngle * 0.4) * (0.5 + Math.sin(now * 0.5 + c * 1.2) * 0.3);
+
+        ctx.lineWidth = lineWidth * (1 - t * 0.5);
+        ctx.strokeStyle = hexToRgba(
+          c % 2 === 0 ? p.mandalaColor1 : p.mandalaColor2,
+          0.2 + t * 0.8
+        );
+
+        ctx.beginPath();
+        ctx.arc(0, 0, r, -halfArc, halfArc);
+        ctx.stroke();
+
+        if (c > 0) {
+          const innerR = r * 0.55;
+          ctx.strokeStyle = hexToRgba(
+            c % 2 === 0 ? p.mandalaColor2 : p.mandalaColor1,
+            0.15 + t * 0.35
+          );
+          ctx.lineWidth = lineWidth * 0.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, innerR, -halfArc * 1.5, halfArc * 1.5);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+    ctx.restore();
+  };
+
+  const drawFractalBackground = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+    const p = paramsRef.current;
+    if (!p.fractalEnabled) return;
+
+    const amp = p.fractalAudioReactive ? getCurrentAmplitude() : 0;
+    switch (p.fractalType) {
+      case "ripple": drawRippleFractal(ctx, canvas, amp); break;
+      case "spiral": drawSpiralFractal(ctx, canvas, amp); break;
+      case "mandala": drawMandalaFractal(ctx, canvas, amp); break;
+    }
+  };
+
   const tick = () => {
     const audioEl = audioRef.current;
     const canvas = canvasRef.current;
@@ -550,6 +936,7 @@ export default function AudioVisualizer() {
     if (!audioEl || !canvas || !ctx || !monoSamples) return;
 
     syncCanvasSize();
+    syncFractalCanvasSize();
 
     const duration = durationRef.current;
     if (!duration) return;
@@ -565,15 +952,57 @@ export default function AudioVisualizer() {
     const headPointIndex = Math.floor(headSampleIndex / step);
     const head = clamp(headPointIndex, 0, pointCount - 1);
 
-    const shouldFade = audioEl.loop || (drawingModeRef.current !== "record" && isLoopingUI);
+    const p = paramsRef.current;
+    const isFractal = p.fractalEnabled;
+    const layerMode = p.fractalLayerMode;
+    const isRecording = drawingModeRef.current === "record";
+
+    // --- 1. DRAW FRACTAL CANVAS (background layer, every frame) ---
+    const fractalCanvas = fractalCanvasRef.current;
+    const fractalCtx = fractalCtxRef.current;
+    if (fractalCanvas && fractalCtx) {
+      fractalCtx.clearRect(0, 0, fractalCanvas.width, fractalCanvas.height);
+      if (isFractal && layerMode === "replace") {
+        drawFractalBackground(fractalCtx, fractalCanvas);
+      } else {
+        const img = bgImageRef.current;
+        if (img) {
+          const scale = Math.max(fractalCanvas.width / img.width, fractalCanvas.height / img.height);
+          const x = (fractalCanvas.width - img.width * scale) / 2;
+          const y = (fractalCanvas.height - img.height * scale) / 2;
+          fractalCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        } else {
+          fractalCtx.fillStyle = p.bgColor;
+          fractalCtx.fillRect(0, 0, fractalCanvas.width, fractalCanvas.height);
+        }
+        if (isFractal && layerMode === "overlay") {
+          fractalCtx.save();
+          fractalCtx.globalAlpha = p.fractalOpacity;
+          drawFractalBackground(fractalCtx, fractalCanvas);
+          fractalCtx.restore();
+        }
+      }
+    }
+
+    // --- 2. WAVEFORM CANVAS BACKGROUND (transparent + trail or recording composite) ---
+    const shouldFade = audioEl.loop || (!isRecording && isLoopingUI);
+
     if (!hasClearedRef.current) {
-      clearCanvasSolid();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (isRecording && fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
       resetDrawingState();
       hasClearedRef.current = true;
       lastDrawnPointIndexRef.current = 0;
       lastCurvePointRef.current = getPointXY(0);
     } else if (shouldFade) {
-      fadeCanvas(0.02);
+      ctx.fillStyle = 'rgba(0,0,0,0.02)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (isRecording) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+      resetDrawingState();
+      lastDrawnPointIndexRef.current = 0;
+      lastCurvePointRef.current = getPointXY(0);
     }
 
     if (head < lastDrawnPointIndexRef.current && shouldFade) {
@@ -593,6 +1022,7 @@ export default function AudioVisualizer() {
 
     drawTip(progress01);
     drawTitle(ctx, canvas);
+    if (showParticles) updateAndDrawParticles(ctx);
 
     if (!audioEl.loop && progress01 >= 1) {
       isAnimatingRef.current = false;
@@ -667,6 +1097,7 @@ export default function AudioVisualizer() {
       await prepareAndPlay({ loop: isLoopingUI });
       ensureCanvasContext();
       clearCanvasSolid();
+      syncFractalCanvasSize();
       resetDrawingState();
       setIsPreviewing(true);
       startAnimation("preview");
@@ -718,7 +1149,7 @@ export default function AudioVisualizer() {
 
       setIsExporting(true);
       setIsPreviewing(false);
-      setCanvasVideoSquare1080();
+      setCanvasVideoSize();
       ensureCanvasContext();
       clearCanvasSolid();
       resetDrawingState();
@@ -932,244 +1363,458 @@ export default function AudioVisualizer() {
   }, [fileName, fileSize]);
 
   return (
-    <section className="glass glass-hover animate-fade-in overflow-hidden p-5">
-      <div className="flex flex-col gap-6 md:flex-row">
-        <aside className="w-full md:w-80 space-y-1">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 pb-1">
-              <div className="h-2 w-2 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.6)]" />
-              <div className="text-xs font-semibold tracking-wider text-indigo-300/80 uppercase">Proceso</div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="block">
-                  <div className="text-xs font-medium text-slate-400 tracking-wide">1. Sube un archivo de audio</div>
+    <section className="glass glass-hover animate-fade-in overflow-hidden p-4">
+      <div className="flex flex-col gap-4 md:flex-row">
+        <aside className="w-full md:w-72 space-y-1 max-h-[calc(100vh-10rem)] overflow-y-auto">
+          <div className="space-y-2 pr-1">
+            <CollapsibleSection
+              title="Audio"
+              collapsed={collapsedSections.has("audio")}
+              onToggle={() => toggleSection("audio")}
+              icon={<div className="h-1.5 w-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.6)]" />}
+            >
+              <div className="flex flex-col gap-1">
                 <input
                   type="file"
                   accept="audio/*"
                   disabled={isDecoding || isRecording || isPreviewing}
-                  className="mt-1 block w-full rounded-xl border border-slate-800 bg-slate-950/60 text-sm text-slate-200 transition-all duration-200 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30"
+                  className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-[10px] text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-2 file:py-1 file:text-[10px] file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30"
                   onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
                 />
-              </label>
+                {fileMeta ? (
+                  <div className="text-[10px] text-slate-400">{fileMeta}</div>
+                ) : (
+                  <div className="text-[10px] text-slate-400">Selecciona un archivo de audio</div>
+                )}
+              </div>
 
-              {fileMeta ? (
-                <div className="text-xs text-slate-400">{fileMeta}</div>
-              ) : (
-                <div className="text-xs text-slate-400">Click para seleccionar archivo audio</div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="block">
-                  <div className="text-xs font-medium text-slate-400 tracking-wide">1.5. Incluir imagen de fondo (opcional)</div>
+              <div className="flex flex-col gap-1 pt-1">
+                <div className="text-[10px] font-medium text-slate-400 tracking-wide">Imagen fondo (opcional)</div>
                 <input
                   type="file"
                   accept="image/*"
                   disabled={isDecoding || isRecording || isPreviewing}
-                  className="mt-1 block w-full rounded-xl border border-slate-800 bg-slate-950/60 text-sm text-slate-200 transition-all duration-200 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-3 file:py-2 file:text-sm file:font-medium file:text-cyan-200 hover:file:bg-cyan-500/30"
+                  className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-[10px] text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-2 file:py-1 file:text-[10px] file:font-medium file:text-cyan-200 hover:file:bg-cyan-500/30"
                   onChange={(e) => onPickBgImage(e.target.files?.[0] ?? null)}
                 />
-              </label>
-              {bgImage && (
-                <button 
-                  type="button"
-                  onClick={() => onPickBgImage(null)}
-                  className="self-start rounded-lg px-2 py-1 text-[11px] text-rose-400 transition-all duration-200 hover:bg-rose-950/30 hover:text-rose-300"
-                >
-                  Remover imagen de fondo
-                </button>
-              )}
-            </div>
+                {bgImage && (
+                  <button
+                    type="button"
+                    onClick={() => onPickBgImage(null)}
+                    className="self-start rounded-lg px-1.5 py-0.5 text-[10px] text-rose-400 transition-all duration-200 hover:bg-rose-950/30"
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+            </CollapsibleSection>
 
-            <div className="flex items-center gap-2 pt-1">
-              <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.6)]" />
-              <div className="text-xs font-semibold tracking-wider text-cyan-300/80 uppercase">Parámetros</div>
-            </div>
-
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handlePreview}
-                disabled={isDecoding || isRecording || isPreviewing || !audioUrl || !waveformReady}
-                className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_24px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
-              >
-                Previsualizar
-              </button>
-            
+            <CollapsibleSection
+              title="Onda"
+              collapsed={collapsedSections.has("wave")}
+              onToggle={() => toggleSection("wave")}
+              icon={<div className="h-1 w-1 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.6)]" />}
+            >
               <label className="block">
-                <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-400 tracking-wide">
-                  <span>Radio del círculo</span>
+                <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                  <span>Radio</span>
                   <span className="tabular-nums text-slate-300">{radiusRatio.toFixed(2)}</span>
                 </div>
-                <input
-                  type="range"
-                  min={0.25}
-                  max={0.6}
-                  step={0.01}
-                  value={radiusRatio}
-                  onChange={(e) => setRadiusRatio(parseFloat(e.target.value))}
-                  disabled={isDecoding || isRecording}
-                  className="mt-1.5 w-full"
-                />
+                <input type="range" min={0.25} max={0.6} step={0.01} value={radiusRatio} onChange={(e) => setRadiusRatio(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
               </label>
 
-              <label className="block">
-                <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-400 tracking-wide">
-                  <span>Intensidad de onda</span>
+              <label className="block pt-1">
+                <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                  <span>Intensidad</span>
                   <span className="tabular-nums text-slate-300">{intensity.toFixed(2)}</span>
                 </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={0.8}
-                  step={0.01}
-                  value={intensity}
-                  onChange={(e) => setIntensity(parseFloat(e.target.value))}
-                  disabled={isDecoding || isRecording}
-                  className="mt-1.5 w-full"
-                />
+                <input type="range" min={0} max={0.8} step={0.01} value={intensity} onChange={(e) => setIntensity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
               </label>
 
-              <label className="block">
-                <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-400 tracking-wide">
-                  <span>Grosor del trazo</span>
+              <label className="block pt-1">
+                <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                  <span>Grosor</span>
                   <span className="tabular-nums text-slate-300">{strokeWidth.toFixed(1)}</span>
                 </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  step={0.5}
-                  value={strokeWidth}
-                  onChange={(e) => setStrokeWidth(parseFloat(e.target.value))}
-                  disabled={isDecoding || isRecording}
-                  className="mt-1.5 w-full"
-                />
+                <input type="range" min={1} max={10} step={0.5} value={strokeWidth} onChange={(e) => setStrokeWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
               </label>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-1.5 pt-1">
                 <label className="block">
-                  <div className="text-xs font-medium text-slate-400 tracking-wide">Color de la onda</div>
-                  <input
-                    type="color"
-                    value={waveColor}
-                    onChange={(e) => setWaveColor(e.target.value)}
-                    disabled={isDecoding || isRecording}
-                    className="mt-1 h-10 w-full cursor-pointer rounded-xl transition-all duration-200 hover:shadow-[0_0_12px_rgba(99,102,241,0.3)]"
-                  />
+                  <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color</div>
+                  <input type="color" value={waveColor} onChange={(e) => setWaveColor(e.target.value)} disabled={isDecoding || isRecording} className="mt-0.5 h-7 w-full cursor-pointer rounded-lg" />
                 </label>
                 <label className="block">
-                  <div className="text-xs font-medium text-slate-400 tracking-wide">Color de fondo</div>
-                  <input
-                    type="color"
-                    value={bgColor}
-                    onChange={(e) => setBgColor(e.target.value)}
-                    disabled={isDecoding || isRecording || bgImage !== null}
-                    className="mt-1 h-10 w-full cursor-pointer rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                  />
+                  <div className="text-[10px] font-medium text-slate-400 tracking-wide">Fondo</div>
+                  <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} disabled={isDecoding || isRecording || bgImage !== null} className="mt-0.5 h-7 w-full cursor-pointer rounded-lg disabled:opacity-30" />
                 </label>
               </div>
 
-              <div className="border-t border-slate-800/60 pt-3">
-                <div className="flex items-center gap-2 pb-1">
-                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.6)]" />
-                  <div className="text-xs font-semibold tracking-wider text-indigo-300/80 uppercase">Título de la canción</div>
-                </div>
-                <input
-                  type="text"
-                  value={songTitle}
-                  onChange={(e) => setSongTitle(e.target.value)}
-                  placeholder="Mi canción..."
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-200 transition-all duration-200 placeholder:text-slate-600 focus:border-indigo-500/50 focus:shadow-[0_0_12px_rgba(99,102,241,0.15)] focus:outline-none"
-                />
-                <input
-                  type="color"
-                  value={titleColor}
-                  onChange={(e) => setTitleColor(e.target.value)}
-                  className="mt-1.5 h-9 w-full cursor-pointer rounded-xl transition-all duration-200 hover:shadow-[0_0_12px_rgba(99,102,241,0.3)]"
-                />
+              <div className="pt-1">
+                <div className="text-[10px] font-medium text-slate-400 tracking-wide pb-0.5">Gradiente</div>
+                <select value={waveGradientMode} onChange={(e) => setWaveGradientMode(e.target.value as any)} disabled={isDecoding || isRecording} className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[10px] text-slate-200 focus:border-indigo-500/50 focus:outline-none">
+                  <option value="solid">Sólido</option>
+                  <option value="gradient">Gradiente</option>
+                  <option value="rainbow">Arcoíris</option>
+                </select>
               </div>
 
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={isLoopingUI}
-                  onChange={(e) => {
-                    const v = e.target.checked;
-                    setIsLoopingUI(v);
-                    if (audioRef.current) audioRef.current.loop = v;
-                  }}
-                  disabled={isRecording}
-                  className="h-4 w-4 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 transition-all duration-200 focus:ring-indigo-500/30"
-                />
-                Loop (para la animación de preview)
+              {waveGradientMode === "gradient" && (
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <label className="block">
+                    <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 1</div>
+                    <input type="color" value={gradColor1} onChange={(e) => setGradColor1(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                  </label>
+                  <label className="block">
+                    <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 2</div>
+                    <input type="color" value={gradColor2} onChange={(e) => setGradColor2(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                  </label>
+                </div>
+              )}
+
+              <label className="block pt-1">
+                <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                  <span>Brillo</span>
+                  <span className="tabular-nums text-slate-300">{glowIntensity.toFixed(2)}</span>
+                </div>
+                <input type="range" min={0} max={1} step={0.05} value={glowIntensity} onChange={(e) => setGlowIntensity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
               </label>
 
-              {error ? (
-                <div className="rounded-xl border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-3 text-sm text-rose-200 shadow-lg shadow-rose-900/10">
-                  {error}
-                </div>
-              ) : null}
-              {recordError ? (
-                <div className="rounded-xl border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-3 text-sm text-rose-200 shadow-lg shadow-rose-900/10">
-                  {recordError}
-                </div>
-              ) : null}
+              <label className="flex cursor-pointer items-center gap-1.5 pt-1 text-[10px] text-slate-400 transition-all duration-200 hover:text-slate-300">
+                <input type="checkbox" checked={showParticles} onChange={(e) => setShowParticles(e.target.checked)} disabled={isDecoding || isRecording} className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500" />
+                Partículas
+              </label>
+              {showParticles && (
+                <label className="block pt-0.5">
+                  <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color partículas</div>
+                  <input type="color" value={particleColor} onChange={(e) => setParticleColor(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                </label>
+              )}
+            </CollapsibleSection>
 
-              <button
-                type="button"
-                onClick={() => void stopAll()}
-                disabled={(!isRecording && !isPreviewing) || isDecoding}
-                className="w-full rounded-xl bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-300 transition-all duration-200 hover:bg-slate-700/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Detener previsualización
-              </button>
+            <CollapsibleSection
+              title="Exportar"
+              collapsed={collapsedSections.has("export")}
+              onToggle={() => toggleSection("export")}
+              icon={<div className="h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />}
+            >
+              <div className="text-[10px] font-medium text-slate-400 tracking-wide pb-0.5">Resolución</div>
+              <div className="grid grid-cols-3 gap-1">
+                {(["720p", "1080p", "4K"] as const).map((r) => (
+                  <button key={r} type="button" onClick={() => setResolution(r)} disabled={isExporting || isRecording}
+                    className={`rounded-lg px-1.5 py-1 text-[10px] font-medium transition-all duration-200 ${
+                      resolution === r
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                        : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
 
-              <button
-                type="button"
-                onClick={() => void handleGenerateAndDownloadRealtime()}
+              <button type="button" onClick={() => void handleGenerateAndDownloadRealtime()}
                 disabled={isDecoding || isRecording || isExporting || !audioUrl || !waveformReady}
-                className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_24px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
+                className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
               >
-                3. Generar y descargar video
+                Generar y descargar video
               </button>
 
-              <div className="rounded-xl border border-amber-900/30 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-300/70">
-                Mantén la pestaña en primer plano mientras se genera el video. La descarga iniciará automáticamente al terminar el audio.
+              <div className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-2 py-1 mt-1.5 text-[10px] leading-relaxed text-amber-300/70">
+                Mantén la pestaña en primer plano.
               </div>
 
               {isExporting ? (
-                <div className="space-y-1 pt-1">
-                  <div className="flex items-center gap-2 text-xs text-indigo-300">
-                    <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <div className="pt-1">
+                  <div className="flex items-center gap-1.5 text-[10px] text-indigo-300">
+                    <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Exportando video...
+                    Exportando...
                   </div>
                 </div>
               ) : null}
-            </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Fondo"
+              collapsed={collapsedSections.has("bg")}
+              onToggle={() => toggleSection("bg")}
+              icon={<div className="h-1 w-1 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.6)]" />}
+            >
+              <div className="flex flex-wrap gap-1">
+                {bgPresets.map((p) => (
+                  <button key={p.id} type="button" onClick={() => applyBgPreset(p.id)} disabled={isDecoding || isRecording}
+                    className={`rounded-lg px-2 py-0.5 text-[10px] font-medium transition-all duration-200 ${
+                      activeBgPreset === p.id
+                        ? "bg-violet-500/20 text-violet-300 border border-violet-500/40"
+                        : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Fractal"
+              collapsed={collapsedSections.has("fractal")}
+              onToggle={() => toggleSection("fractal")}
+              icon={<div className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(192,38,211,0.6)]" />}
+            >
+              <label className="flex cursor-pointer items-center gap-1.5 pb-1 text-[10px] text-slate-400 transition-all duration-200 hover:text-slate-300">
+                <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)}
+                  disabled={isDecoding || isRecording} className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500"
+                />
+                Activar fractal
+              </label>
+
+              {fractalEnabled && (
+                <div className="space-y-1">
+                  <select value={fractalType} onChange={(e) => setFractalType(e.target.value as any)}
+                    disabled={isDecoding || isRecording}
+                    className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[10px] text-slate-200 focus:border-fuchsia-500/50 focus:outline-none"
+                  >
+                    <option value="ripple">Ondas (Ripple)</option>
+                    <option value="spiral">Espiral (Phyllotaxis)</option>
+                    <option value="mandala">Mandala</option>
+                  </select>
+
+                  <select value={fractalLayerMode} onChange={(e) => setFractalLayerMode(e.target.value as any)}
+                    disabled={isDecoding || isRecording}
+                    className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[10px] text-slate-200 focus:border-fuchsia-500/50 focus:outline-none"
+                  >
+                    <option value="overlay">Superposición</option>
+                    <option value="replace">Fondo completo</option>
+                  </select>
+
+                  {fractalLayerMode === "overlay" && (
+                    <label className="block">
+                      <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                        <span>Opacidad</span>
+                        <span className="tabular-nums text-slate-300">{fractalOpacity.toFixed(2)}</span>
+                      </div>
+                      <input type="range" min={0.1} max={1} step={0.05} value={fractalOpacity} onChange={(e) => setFractalOpacity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                    </label>
+                  )}
+
+                  <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-slate-400 transition-all duration-200 hover:text-slate-300">
+                    <input type="checkbox" checked={fractalAudioReactive} onChange={(e) => setFractalAudioReactive(e.target.checked)}
+                      disabled={isDecoding || isRecording} className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500"
+                    />
+                    Reactivo al audio
+                  </label>
+
+                  {/* RIPPLE CONTROLS */}
+                  {fractalType === "ripple" && (
+                    <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
+                      <div className="text-[9px] font-semibold tracking-wider text-fuchsia-400/60 uppercase">Ondas</div>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Anillos</span>
+                          <span className="tabular-nums text-slate-300">{rippleRingCount}</span>
+                        </div>
+                        <input type="range" min={3} max={20} step={1} value={rippleRingCount} onChange={(e) => setRippleRingCount(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Velocidad</span>
+                          <span className="tabular-nums text-slate-300">{rippleSpeed.toFixed(1)}</span>
+                        </div>
+                        <input type="range" min={0.1} max={3} step={0.1} value={rippleSpeed} onChange={(e) => setRippleSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Amplitud</span>
+                          <span className="tabular-nums text-slate-300">{rippleAmplitude}</span>
+                        </div>
+                        <input type="range" min={2} max={60} step={1} value={rippleAmplitude} onChange={(e) => setRippleAmplitude(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Grosor</span>
+                          <span className="tabular-nums text-slate-300">{rippleThickness.toFixed(1)}</span>
+                        </div>
+                        <input type="range" min={0.5} max={6} step={0.5} value={rippleThickness} onChange={(e) => setRippleThickness(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <label className="block">
+                          <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 1</div>
+                          <input type="color" value={rippleColor1} onChange={(e) => setRippleColor1(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                        </label>
+                        <label className="block">
+                          <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 2</div>
+                          <input type="color" value={rippleColor2} onChange={(e) => setRippleColor2(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SPIRAL CONTROLS */}
+                  {fractalType === "spiral" && (
+                    <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
+                      <div className="text-[9px] font-semibold tracking-wider text-fuchsia-400/60 uppercase">Espiral</div>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Densidad</span>
+                          <span className="tabular-nums text-slate-300">{spiralDensity}</span>
+                        </div>
+                        <input type="range" min={50} max={500} step={10} value={spiralDensity} onChange={(e) => setSpiralDensity(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Rotación</span>
+                          <span className="tabular-nums text-slate-300">{spiralRotationSpeed.toFixed(1)}</span>
+                        </div>
+                        <input type="range" min={-3} max={3} step={0.1} value={spiralRotationSpeed} onChange={(e) => setSpiralRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Apertura</span>
+                          <span className="tabular-nums text-slate-300">{spiralTightness.toFixed(2)}</span>
+                        </div>
+                        <input type="range" min={0.1} max={1.5} step={0.05} value={spiralTightness} onChange={(e) => setSpiralTightness(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Tamaño punto</span>
+                          <span className="tabular-nums text-slate-300">{spiralDotSize.toFixed(1)}</span>
+                        </div>
+                        <input type="range" min={0.5} max={6} step={0.5} value={spiralDotSize} onChange={(e) => setSpiralDotSize(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <label className="block">
+                          <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 1</div>
+                          <input type="color" value={spiralColor1} onChange={(e) => setSpiralColor1(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                        </label>
+                        <label className="block">
+                          <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 2</div>
+                          <input type="color" value={spiralColor2} onChange={(e) => setSpiralColor2(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MANDALA CONTROLS */}
+                  {fractalType === "mandala" && (
+                    <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
+                      <div className="text-[9px] font-semibold tracking-wider text-fuchsia-400/60 uppercase">Mandala</div>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Segmentos</span>
+                          <span className="tabular-nums text-slate-300">{mandalaSegments}</span>
+                        </div>
+                        <input type="range" min={3} max={24} step={1} value={mandalaSegments} onChange={(e) => setMandalaSegments(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Rotación</span>
+                          <span className="tabular-nums text-slate-300">{mandalaRotationSpeed.toFixed(1)}</span>
+                        </div>
+                        <input type="range" min={-3} max={3} step={0.1} value={mandalaRotationSpeed} onChange={(e) => setMandalaRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Complejidad</span>
+                          <span className="tabular-nums text-slate-300">{mandalaComplexity}</span>
+                        </div>
+                        <input type="range" min={1} max={6} step={1} value={mandalaComplexity} onChange={(e) => setMandalaComplexity(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <label className="block">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 tracking-wide">
+                          <span>Grosor línea</span>
+                          <span className="tabular-nums text-slate-300">{mandalaLineWidth.toFixed(1)}</span>
+                        </div>
+                        <input type="range" min={0.5} max={5} step={0.5} value={mandalaLineWidth} onChange={(e) => setMandalaLineWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <label className="block">
+                          <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 1</div>
+                          <input type="color" value={mandalaColor1} onChange={(e) => setMandalaColor1(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                        </label>
+                        <label className="block">
+                          <div className="text-[10px] font-medium text-slate-400 tracking-wide">Color 2</div>
+                          <input type="color" value={mandalaColor2} onChange={(e) => setMandalaColor2(e.target.value)} className="mt-0.5 h-6 w-full cursor-pointer rounded-lg" />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Título"
+              collapsed={collapsedSections.has("title")}
+              onToggle={() => toggleSection("title")}
+              icon={<div className="h-1 w-1 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.6)]" />}
+            >
+              <input type="text" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} placeholder="Mi canción..."
+                className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/50 focus:outline-none"
+              />
+              <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} className="mt-1 h-7 w-full cursor-pointer rounded-lg" />
+            </CollapsibleSection>
+
+            {/* Waveform preview */}
+            {waveformReady && (
+              <div>
+                <div className="text-[10px] font-medium text-slate-500 tracking-wide pb-0.5">Waveform</div>
+                <canvas ref={previewCanvasRef} className="w-full h-14 rounded-lg border border-slate-800/60 bg-slate-950/40" />
+              </div>
+            )}
+
+            <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-slate-400 transition-all duration-200 hover:text-slate-300">
+              <input type="checkbox" checked={isLoopingUI} onChange={(e) => { const v = e.target.checked; setIsLoopingUI(v); if (audioRef.current) audioRef.current.loop = v; }}
+                disabled={isRecording} className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500"
+              />
+              Loop preview
+            </label>
+
+            <button type="button" onClick={handlePreview}
+              disabled={isDecoding || isRecording || isPreviewing || !audioUrl || !waveformReady}
+              className="w-full rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
+            >
+              Previsualizar
+            </button>
+
+            <button type="button" onClick={() => void stopAll()}
+              disabled={(!isRecording && !isPreviewing) || isDecoding}
+              className="w-full rounded-lg bg-slate-800/80 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all duration-200 hover:bg-slate-700/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Detener
+            </button>
+
+            {error ? (
+              <div className="rounded-lg border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-2 text-[10px] text-rose-200 shadow-lg shadow-rose-900/10">
+                {error}
+              </div>
+            ) : null}
+            {recordError ? (
+              <div className="rounded-lg border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-2 text-[10px] text-rose-200 shadow-lg shadow-rose-900/10">
+                {recordError}
+              </div>
+            ) : null}
           </div>
         </aside>
 
-        <div className="flex-1">
-          <div className="space-y-1.5">
-            <div className="text-lg font-bold text-gradient-soft tracking-tight">
-              Visualizador
-            </div>
-            <div className="text-xs text-slate-500 leading-relaxed">
-              El trazo avanza 360° en sincronía con el audio. Ajusta los parámetros en vivo.
-            </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-base font-bold text-gradient-soft tracking-tight">Visualizador</div>
+            <div className="text-[10px] text-slate-500">Ajusta parámetros en vivo</div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-700/50 bg-slate-950/60 p-2 shadow-[0_0_30px_rgba(99,102,241,0.1)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(99,102,241,0.18)]">
-            <canvas ref={canvasRef} className="aspect-square w-full rounded-lg" />
+          <div className="rounded-xl border border-slate-700/50 bg-slate-950/60 p-2 shadow-[0_0_30px_rgba(99,102,241,0.1)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(99,102,241,0.18)]">
+            <div className="relative w-full aspect-square">
+              <canvas ref={fractalCanvasRef}
+                className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
+                style={{ zIndex: 0 }} />
+              <canvas ref={canvasRef}
+                className="relative w-full h-full rounded-lg"
+                style={{ zIndex: 1 }} />
+            </div>
             <audio ref={audioRef} className="hidden" />
-          </div>
-          <div className="mt-2.5 text-[11px] text-slate-600">
-            💡 Consejo: usa un fondo verde pastel si quieres recortar el chroma después.
           </div>
         </div>
       </div>
