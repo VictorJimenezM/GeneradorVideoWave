@@ -1944,6 +1944,14 @@ export default function AudioVisualizer() {
                     onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
                   />
                 </FileDropZone>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isDecoding || isRecording || isPreviewing}
+                  className="w-full rounded-lg border border-slate-800 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300 hover:border-indigo-500/50 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  📁 Probar selección (fileInputRef.click)
+                </button>
                 {fileMeta ? (
                   <div className="text-xs text-slate-400">{fileMeta}</div>
                 ) : (
