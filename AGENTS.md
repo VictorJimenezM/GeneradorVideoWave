@@ -22,10 +22,10 @@ No test, lint, or typecheck scripts exist.
 | # | Section | Content |
 |---|---------|---------|
 | 1 | **Audio** (collapsible) | File input + file info |
-| 2 | **Onda** (collapsible) | Radio, intensidad, grosor, color, gradiente, brillo, partículas (checkbox + color + opacidad slider) |
-| 3 | **Fondo** (collapsible, expanded) | 3 tabs mutuamente excluyentes: **Color** (presets + picker), **Imagen** (file input + remove), **Fractal** (tipo, layer mode, opacidad, reactivo, ripple/spiral/mandala) |
-| 4 | **Título** (collapsible) | Text input + color picker |
-| 5 | — | Waveform preview, Loop preview, **Previsualizar**, **Detener** |
+| 2 | **Onda** (collapsible) | **Forma** (radio, intensidad, grosor), **Color** (color, gradiente, brillo), **Texto** (input + estilo preset + color picker) |
+| 3 | **Partículas** (collapsible) | Activar checkbox, color, opacidad slider |
+| 4 | **Fondo** (collapsible, expanded) | 3 tabs mutuamente excluyentes: **Color** (presets + picker), **Imagen** (preset select + file upload + remove), **Fractal** (tipo, layer mode, opacidad, reactivo, ripple/spiral/mandala) |
+| 5 | — | Waveform preview, Loop preview, Volumen slider, **Previsualizar**, **Detener** |
 | 6 | **Exportar** (collapsible) | Resolución (720p/1080p/4K), botón generar |
 
 ## State defaults
@@ -34,7 +34,7 @@ No test, lint, or typecheck scripts exist.
 - `bgMode` = `"color"` (`"color"` | `"image"` | `"fractal"`)
 - `fractalEnabled` = `false`
 - `particleOpacity` = `0.7`
-- `collapsedSections` starts with `"bg"` and `"title"` collapsed
+- `collapsedSections` starts with `"bg"` and `"particles"` collapsed
 
 ## Dual-canvas rendering pipeline
 

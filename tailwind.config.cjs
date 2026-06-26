@@ -6,6 +6,12 @@ module.exports = {
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
       },
+      fontSize: {
+        "ui-2xs": ["0.6875rem", { lineHeight: "0.875rem" }],
+        "ui-xs": ["0.75rem", { lineHeight: "1rem" }],
+        "ui-sm": ["0.8125rem", { lineHeight: "1.25rem" }],
+        "ui-base": ["0.875rem", { lineHeight: "1.5rem" }],
+      },
       animation: {
         "fade-in": "fadeIn 0.6s ease-out forwards",
         "slide-up": "slideUp 0.5s ease-out forwards",
