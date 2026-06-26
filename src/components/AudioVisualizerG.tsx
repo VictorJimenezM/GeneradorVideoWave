@@ -283,6 +283,7 @@ export default function AudioVisualizer() {
   // UI / audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioObjectUrlRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>("");
   const [fileSize, setFileSize] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -1835,6 +1836,12 @@ export default function AudioVisualizer() {
     setAudioUrl(null);
 
     if (!file) return;
+    const validAudioExts = ["mp3", "wav", "ogg", "m4a", "flac", "aac", "wma", "aiff", "opus"];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!validAudioExts.includes(ext || "")) {
+      setError("Formato no soportado. Usa MP3, WAV, OGG, M4A, FLAC, AAC, WMA, AIFF u OPUS.");
+      return;
+    }
     const url = URL.createObjectURL(file);
     audioObjectUrlRef.current = url;
     setAudioUrl(url);
@@ -1924,11 +1931,13 @@ export default function AudioVisualizer() {
               <div className="flex flex-col gap-1">
                 <FileDropZone onDrop={(file) => onPickFile(file)}>
                   <input
+                    ref={fileInputRef}
                     type="file"
-                    accept="audio/*"
+                    accept=".mp3,.wav,.ogg,.m4a,.flac,.aac,.wma,.aiff,.opus,audio/*"
                     aria-label="Seleccionar archivo de audio"
                     disabled={isDecoding || isRecording || isPreviewing}
                     className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-xs text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                    onClick={(e) => { e.currentTarget.value = "" }}
                     onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
                   />
                 </FileDropZone>
