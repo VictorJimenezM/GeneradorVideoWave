@@ -1936,7 +1936,7 @@ export default function AudioVisualizer() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept={isMobile ? "audio/*,application/octet-stream" : ".mp3,.wav,.ogg,.m4a,.flac,.aac,.wma,.aiff,.opus"}
+                    //accept={isMobile ? "audio/*,application/octet-stream" : ".mp3,.wav,.ogg,.m4a,.flac,.aac,.wma,.aiff,.opus"}
                     aria-label="Seleccionar archivo de audio"
                     disabled={isDecoding || isRecording || isPreviewing}
                     className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-xs text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
@@ -1951,7 +1951,7 @@ export default function AudioVisualizer() {
                   disabled={isDecoding || isRecording || isPreviewing}
                   className="w-full rounded-lg border border-slate-800 bg-indigo-950/40 px-3 py-2 text-xs text-indigo-300 hover:border-indigo-500/50 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  📁 Probar selección  2 (fileInputRef.click)
+                  📁 Probar selección  3 (fileInputRef.click)
                 </button>
                 
                 {fileMeta ? (
