@@ -1945,16 +1945,6 @@ export default function AudioVisualizer() {
                   />
                 </FileDropZone>
                 
-                <div className="p-4 bg-slate-900 rounded-lg my-4">
-                  <p className="text-white text-xs mb-2">Prueba de Input Nativo Directo: 2</p>
-                  <input
-                    type="file"
-                    accept="audio/*" 
-                    className="text-white text-xs text-slate-200"
-                    onChange={(e) => alert("Archivo seleccionado: " + e.target.files?.[0]?.name)}
-                  />
-                </div>
-                
                 {fileMeta ? (
                   <div className="text-xs text-slate-400">{fileMeta}</div>
                 ) : (
