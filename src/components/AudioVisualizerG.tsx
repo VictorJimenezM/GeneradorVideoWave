@@ -1944,7 +1944,11 @@ export default function AudioVisualizer() {
                     onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
                   />
                 </FileDropZone>
-                
+
+                <p className="mt-1 text-xs text-amber-400/80">
+                  Si tienes problemas seleccionando el archivo, revisa la configuración de tu celular
+                </p>
+
                 {fileMeta ? (
                   <div className="text-xs text-slate-400">{fileMeta}</div>
                 ) : (

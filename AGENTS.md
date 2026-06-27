@@ -224,20 +224,4 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - Returns `{ isRunning, error, fftSize, data: Uint8Array, start, stop }`
 - **Not used** by `AudioVisualizerG` — available for microphone visualization features.
 
-## 🐛 Problema: selector de archivos en Android (pendiente)
 
-**Síntoma**: en Android (Brave/Chrome/Firefox), al tocar "Seleccionar archivo de audio", no aparece el explorador de archivos. Solo muestra Grabadora y Google Drive (con `accept="audio/*"`), o Cámara + Grabadora + Google Drive (con `accept={undefined}`).
-
-**Causa probable**: el bottom sheet de Chrome Android no lista "Archivos"/"Explorar". Posiblemente el Intent filter del navegador no incluye el file manager para inputs tipo `file` con ciertos MIME types.
-
-**Intentos realizados** (commits):
-1. `08be624` — Extensiones específicas + `audio/*` en `accept` — ❌
-2. `d96f5c3` — Detección mobile + `accept="*/*"` — ❌
-3. `ba8a955` — `accept={undefined}` en mobile (sin atributo) — ❌
-4. `78b455f` — Botón de prueba `fileInputRef.current?.click()` — ❌ pendiente de probar
-
-**Sesión siguiente**: probar el botón `fileInputRef.click()`. Si no funciona, explorar:
-- Forzar `capture` attribute
-- Input invisible + botón personalizado con `<label>` asociada
-- `showDirectoryPicker` / drag-drop como única vía en mobile
-- Implementar Web Workers para decode remoto vía fetch + blob
