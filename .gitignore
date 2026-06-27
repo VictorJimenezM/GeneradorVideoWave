@@ -3,6 +3,5 @@ dist/
 .DS_Store
 *.local
 .opencode/
-Dockerfile
-docker-compose.yml
-.dockerignore
+.cert/*.pem
+*.pem
