@@ -382,6 +382,8 @@ export default function AudioVisualizer() {
     titleColor,
     titlePreset,
     glowIntensity,
+    showParticles,
+    particleColor,
     particleOpacity,
     waveGradientMode,
     gradColor1,
@@ -414,7 +416,7 @@ export default function AudioVisualizer() {
   useEffect(() => {
     paramsRef.current = {
       radiusRatio, intensity, strokeWidth, waveColor, bgColor,
-      songTitle, titleColor, titlePreset, glowIntensity, particleOpacity, waveGradientMode, gradColor1, gradColor2,
+      songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
       fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
       spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
@@ -424,7 +426,7 @@ export default function AudioVisualizer() {
     redrawBackgroundCanvas();
   }, [
     radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage,
-    songTitle, titleColor, titlePreset, glowIntensity, particleOpacity, waveGradientMode, gradColor1, gradColor2,
+    songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
     fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
     spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
@@ -736,7 +738,7 @@ export default function AudioVisualizer() {
     const tipRadius = Math.max(2, Math.min(10, (ctx.lineWidth || 4) * 0.9));
 
     // Limpiar el cursor anterior solo si partículas está activo
-    if (lastTipRef.current && showParticles) {
+    if (lastTipRef.current && paramsRef.current.showParticles) {
       const prev = lastTipRef.current;
       const r = prev.r + 2;
       ctx.save();
@@ -755,7 +757,7 @@ export default function AudioVisualizer() {
     ctx.fill();
     ctx.restore();
 
-    if (showParticles && (drawingModeRef.current === "preview" || drawingModeRef.current === "record")) {
+    if (paramsRef.current.showParticles && (drawingModeRef.current === "preview" || drawingModeRef.current === "record")) {
       emitParticles(x, y, 2);
     }
 
@@ -809,7 +811,7 @@ export default function AudioVisualizer() {
       p.life -= dt / p.maxLife;
       if (p.life <= 0) { particles.splice(i, 1); continue; }
       ctx.globalAlpha = p.life * opacity;
-      ctx.fillStyle = particleColor;
+      ctx.fillStyle = paramsRef.current.particleColor;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * p.life, 0, TWO_PI);
       ctx.fill();
@@ -1317,7 +1319,7 @@ export default function AudioVisualizer() {
 
     drawTip(progress01);
     drawTitle(ctx, canvas);
-    if (showParticles) updateAndDrawParticles(ctx);
+    if (paramsRef.current.showParticles) updateAndDrawParticles(ctx);
 
     if (!audioEl.loop && progress01 >= 1) {
       isAnimatingRef.current = false;
