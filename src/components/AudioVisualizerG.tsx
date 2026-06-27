@@ -1936,7 +1936,7 @@ export default function AudioVisualizer() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept={isMobile ? undefined : ".mp3,.wav,.ogg,.m4a,.flac,.aac,.wma,.aiff,.opus"}
+                    accept={isMobile ? "audio/*" : ".mp3,.wav,.ogg,.m4a,.flac,.aac,.wma,.aiff,.opus"}
                     aria-label="Seleccionar archivo de audio"
                     disabled={isDecoding || isRecording || isPreviewing}
                     className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-xs text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
@@ -1944,6 +1944,7 @@ export default function AudioVisualizer() {
                     onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
                   />
                 </FileDropZone>
+                
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1952,11 +1953,13 @@ export default function AudioVisualizer() {
                 >
                   📁 Probar selección (fileInputRef.click)
                 </button>
+                
                 {fileMeta ? (
                   <div className="text-xs text-slate-400">{fileMeta}</div>
                 ) : (
                   <div className="text-xs text-slate-400">Selecciona un archivo de audio</div>
                 )}
+                
               </div>
             </CollapsibleSection>
 
