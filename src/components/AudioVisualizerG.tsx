@@ -1345,11 +1345,11 @@ export default function AudioVisualizer() {
       lastDrawnPointIndexRef.current = 0;
       lastCurvePointRef.current = getPointXY(0);
     } else if (shouldFade) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle = 'rgba(0,0,0,0.02)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.restore();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+      resetDrawingState();
+      lastDrawnPointIndexRef.current = 0;
+      lastCurvePointRef.current = getPointXY(0);
     } else if (isRecording) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
