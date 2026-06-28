@@ -13,13 +13,15 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-gradient lg:text-4xl">
-              SOUNDWAVE RENDER
-            </h1>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-gradient lg:text-4xl">
+                SOUNDWAVE RENDER
+              </h1>
+              <p className="text-xs text-slate-500 tracking-wide mt-0.5">Simple Audio to Video</p>
+            </div>
           </div>
-          <p className="max-w-2xl text-sm leading-relaxed text-slate-400">
-            El sonido no solo se escucha, también se ve. Sube tu audio, personaliza
-            la estética y genera videos con espectros visuales únicos.
+          <p className="w-full text-sm leading-relaxed text-slate-400">
+            El sonido no solo se escucha, también se ve. Sube tu audio, personaliza la estética y genera videos con espectros visuales únicos.
           </p>
         </header>
 
@@ -69,9 +71,11 @@ export default function App() {
               <span className="font-medium text-slate-400">AUDIO-DOSIS</span>
               , La Paz — Bolivia
             </span>
+            <span className="text-slate-700">·</span>
+            <span className="text-xs text-slate-500">Si buscas alguna mejora contáctame</span>
           </div>
           <p className="text-xs text-slate-600">
-            Desarrollado con Vite + React + Tailwind
+            Desarrollado con Vite + React + Tailwind, Cursos, Opencode y Ig Pickle
           </p>
         </footer>
       </div>

@@ -194,9 +194,9 @@ export default function AudioVisualizer() {
 
   // Reset all visual parameters to defaults
   const resetDefaults = useCallback(() => {
-    setRadiusRatio(0.46);
-    setIntensity(0.28);
-    setStrokeWidth(4.5);
+    setRadiusRatio(0.60);
+    setIntensity(0.80);
+    setStrokeWidth(1.0);
     setWaveColor("#6366f1");
     setBgColor("#020617");
     setGlowIntensity(0.4);
@@ -254,7 +254,7 @@ export default function AudioVisualizer() {
 
   // Collapsible sections (Fondo and Partículas start collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(["bg", "particles"])
+    () => new Set(["presets", "wave", "bg", "particles", "text", "export"])
   );
   const toggleSection = useCallback((name: string) => {
     setCollapsedSections((prev) => {
@@ -370,9 +370,9 @@ export default function AudioVisualizer() {
   const [bgImagePreset, setBgImagePreset] = useState<string>("custom");
 
   // Live parameters (state + refs for drawing loop).
-  const [radiusRatio, setRadiusRatio] = useState(0.46); // radio base = min(cx,cy) * ratio
-  const [intensity, setIntensity] = useState(0.28); // amp radius = radiusBase * intensity
-  const [strokeWidth, setStrokeWidth] = useState(4.5);
+  const [radiusRatio, setRadiusRatio] = useState(0.60); // radio base = min(cx,cy) * ratio
+  const [intensity, setIntensity] = useState(0.80); // amp radius = radiusBase * intensity
+  const [strokeWidth, setStrokeWidth] = useState(1.0);
   const [waveColor, setWaveColor] = useState("#6366f1"); // indigo-500
   const [bgColor, setBgColor] = useState("#020617"); // slate-950
 
@@ -1949,50 +1949,20 @@ export default function AudioVisualizer() {
               bpm={iaBpm}
               currentBeatIndex={iaBeatIndex}
               audioLoaded={waveformReady}
+              waveformReady={waveformReady}
+              previewCanvasRef={previewCanvasRef}
+              volume={volume}
+              setVolume={setVolume}
+              isPreviewing={isPreviewing}
+              isRecording={isRecording}
+              isDecoding={isDecoding}
+              handlePreview={handlePreview}
+              stopAll={stopAll}
+              isLoopingUI={isLoopingUI}
+              setIsLoopingUI={setIsLoopingUI}
+              audioUrl={audioUrl}
+              audioRef={audioRef}
             />
-            {/* Reset defaults */}
-            <button type="button" onClick={resetDefaults}
-              aria-label="Restablecer valores predeterminados"
-              className="w-full rounded-lg border border-slate-700/50 bg-slate-800/40 px-2 py-1 text-[11px] font-medium text-slate-400 transition-all duration-200 hover:border-slate-600/50 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-            >
-              ← Resetear valores
-            </button>
-            {/* Quick presets */}
-            {(() => {
-              const presets = [
-                { label: "Croma", key: "croma" },
-                { label: "Imagen", key: "image" },
-                { label: "Fractal 1", key: "fractal1" },
-                { label: "Fractal 2", key: "fractal2" },
-                { label: "Fractal 3", key: "fractal3" },
-              ];
-              return (
-                <>
-                  <div className="grid grid-cols-5 gap-1">
-                    {presets.map((p) => (
-                      <button key={p.key} type="button" onClick={() => applyQuickPreset(p.key)}
-                        aria-label={`Preset ${p.label}`}
-                        className={`rounded-lg px-1 py-0.5 text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
-                          activePreset === p.key
-                            ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
-                            : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-indigo-500/50 hover:text-indigo-300"
-                        }`}
-                      >
-                        {p.label}{presetSavedKeys.has(p.key) ? "*" : ""}
-                      </button>
-                    ))}
-                  </div>
-                  <button type="button" onClick={saveCurrentToActivePreset}
-                    disabled={!activePreset}
-                    aria-label="Guardar preset activo"
-                    className="w-full rounded-lg px-1 py-0.5 text-[11px] font-medium bg-slate-800/60 text-amber-400 border border-slate-700/50 hover:border-amber-500/50 hover:text-amber-300 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                  >
-                    Guardar preset
-                  </button>
-                </>
-              );
-            })()}
-
             <CollapsibleSection
               title="Audio"
               collapsed={collapsedSections.has("audio")}
@@ -2013,17 +1983,67 @@ export default function AudioVisualizer() {
                   />
                 </FileDropZone>
 
-                <p className="mt-1 text-xs text-amber-400/80">
-                  Si tienes problemas seleccionando el archivo, revisa la configuración de tu celular
-                </p>
-
                 {fileMeta ? (
                   <div className="text-xs text-slate-400">{fileMeta}</div>
                 ) : (
                   <div className="text-xs text-slate-400">Selecciona un archivo de audio</div>
                 )}
+
+                <p className="mt-1 text-xs text-amber-400/80">
+                  Revisa permisos si no encuentras tu audio
+                </p>
                 
               </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Presets"
+              collapsed={collapsedSections.has("presets")}
+              onToggle={() => toggleSection("presets")}
+              icon={<div aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]" />}
+            >
+              {(() => {
+                const presets = [
+                  { label: "Croma", key: "croma" },
+                  { label: "Imagen", key: "image" },
+                  { label: "Fractal 1", key: "fractal1" },
+                  { label: "Fractal 2", key: "fractal2" },
+                  { label: "Fractal 3", key: "fractal3" },
+                ];
+                return (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="grid grid-cols-5 gap-1">
+                      {presets.map((p) => (
+                        <button key={p.key} type="button" onClick={() => applyQuickPreset(p.key)}
+                          aria-label={`Preset ${p.label}`}
+                          className={`rounded-lg px-1 py-0.5 text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
+                            activePreset === p.key
+                              ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
+                              : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-indigo-500/50 hover:text-indigo-300"
+                          }`}
+                        >
+                          {p.label}{presetSavedKeys.has(p.key) ? "*" : ""}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button type="button" onClick={resetDefaults}
+                        aria-label="Restablecer valores predeterminados"
+                        className="w-full rounded-lg border border-slate-700/50 bg-slate-800/40 px-2 py-1 text-[11px] font-medium text-slate-400 transition-all duration-200 hover:border-slate-600/50 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                      >
+                        ← Resetear valores
+                      </button>
+                      <button type="button" onClick={saveCurrentToActivePreset}
+                        disabled={!activePreset}
+                        aria-label="Guardar preset activo"
+                        className="w-full rounded-lg px-1 py-0.5 text-[11px] font-medium bg-slate-800/60 text-amber-400 border border-slate-700/50 hover:border-amber-500/50 hover:text-amber-300 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                      >
+                        Guardar preset
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -2057,23 +2077,32 @@ export default function AudioVisualizer() {
                 <input type="range" min={1} max={10} step={0.5} value={strokeWidth} onChange={(e) => setStrokeWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
               </label>
 
+              <label className="block pt-1">
+                <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
+                  <span>Brillo</span>
+                  <span className="tabular-nums text-slate-300">{glowIntensity.toFixed(2)}</span>
+                </div>
+                <input type="range" min={0} max={1} step={0.05} value={glowIntensity} onChange={(e) => setGlowIntensity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+              </label>
+
               <div className="border-t border-slate-800/60 pt-1.5 mt-1.5">
                 <div className="text-[11px] font-semibold tracking-wider text-cyan-400/50 uppercase pb-0.5">Color</div>
-                <label className="block">
-                  <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Onda</div>
-                  <div className="flex items-center gap-1.5">
-                    <input type="color" value={waveColor} onChange={(e) => setWaveColor(e.target.value)} disabled={isDecoding || isRecording} aria-label="Color de onda" className="mt-0.5 h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                    <span className="text-[11px] font-mono text-slate-500">{waveColor}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Onda</div>
+                    <div className="flex items-center gap-1.5">
+                      <input type="color" value={waveColor} onChange={(e) => setWaveColor(e.target.value)} disabled={isDecoding || isRecording} aria-label="Color de onda" className="mt-0.5 h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+                      <span className="text-[11px] font-mono text-slate-500">{waveColor}</span>
+                    </div>
+                  </label>
+                  <div>
+                    <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Gradiente</div>
+                    <select value={waveGradientMode} onChange={(e) => setWaveGradientMode(e.target.value as any)} disabled={isDecoding || isRecording} aria-label="Modo de gradiente" className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950">
+                      <option value="solid">Sólido</option>
+                      <option value="gradient">Gradiente</option>
+                      <option value="rainbow">Arcoíris</option>
+                    </select>
                   </div>
-                </label>
-
-                <div className="pt-1">
-                  <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Gradiente</div>
-                  <select value={waveGradientMode} onChange={(e) => setWaveGradientMode(e.target.value as any)} disabled={isDecoding || isRecording} aria-label="Modo de gradiente" className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950">
-                    <option value="solid">Sólido</option>
-                    <option value="gradient">Gradiente</option>
-                    <option value="rainbow">Arcoíris</option>
-                  </select>
                 </div>
 
                 {waveGradientMode === "gradient" && (
@@ -2094,65 +2123,8 @@ export default function AudioVisualizer() {
                     </label>
                   </div>
                 )}
-
-                <label className="block pt-1">
-                  <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                    <span>Brillo</span>
-                    <span className="tabular-nums text-slate-300">{glowIntensity.toFixed(2)}</span>
-                  </div>
-                  <input type="range" min={0} max={1} step={0.05} value={glowIntensity} onChange={(e) => setGlowIntensity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                </label>
               </div>
 
-              <div className="border-t border-slate-800/60 pt-1.5 mt-1.5">
-                <div className="text-[11px] font-semibold tracking-wider text-cyan-400/50 uppercase pb-0.5">Texto</div>
-                <input type="text" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} placeholder="Mi canción..."
-                  aria-label="Título de la canción"
-                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                />
-                <select value={titlePreset} onChange={(e) => setTitlePreset(e.target.value)}
-                  aria-label="Estilo de título"
-                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                >
-                  {TITLE_PRESETS.map((p) => (
-                    <option key={p.id} value={p.id}>{p.label}</option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} aria-label="Color de título" className="h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                  <span className="text-[11px] font-mono text-slate-500">{titleColor}</span>
-                </div>
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Partículas"
-              collapsed={collapsedSections.has("particles")}
-              onToggle={() => toggleSection("particles")}
-              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.6)]" />}
-            >
-              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-                <input type="checkbox" checked={showParticles} onChange={(e) => setShowParticles(e.target.checked)} disabled={isDecoding || isRecording} aria-label="Mostrar partículas" className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                Activar partículas
-              </label>
-              {showParticles && (
-                <>
-                  <label className="block pt-1">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color</div>
-                    <div className="flex items-center gap-1.5">
-                      <input type="color" value={particleColor} onChange={(e) => setParticleColor(e.target.value)} aria-label="Color de partículas" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[11px] font-mono text-slate-500">{particleColor}</span>
-                    </div>
-                  </label>
-                  <label className="block pt-1">
-                    <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                      <span>Opacidad</span>
-                      <span className="tabular-nums text-slate-300">{particleOpacity.toFixed(2)}</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={particleOpacity} onChange={(e) => setParticleOpacity(parseFloat(e.target.value))} className="mt-0.5 w-full" />
-                  </label>
-                </>
-              )}
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -2443,60 +2415,61 @@ export default function AudioVisualizer() {
               </div>
             </CollapsibleSection>
 
-
-
-            {/* Waveform preview */}
-            {waveformReady && (
-              <div>
-                <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Waveform</div>
-                <canvas ref={previewCanvasRef} className="w-full h-14 rounded-lg border border-slate-800/60 bg-slate-950/40" />
-              </div>
-            )}
-
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-              <input type="checkbox" checked={isLoopingUI} onChange={(e) => { const v = e.target.checked; setIsLoopingUI(v); if (audioRef.current) audioRef.current.loop = v; }}
-                disabled={isRecording} aria-label="Activar loop de preview"
-                className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-              />
-              Loop preview
-            </label>
-
-            <label className="block pt-1">
-              <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                <span>Volumen</span>
-                <span className="tabular-nums text-slate-300">{Math.round(volume * 100)}%</span>
-              </div>
-              <input type="range" min={0} max={1} step={0.05} value={volume}
-                onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); if (audioRef.current) audioRef.current.volume = v; }}
-                aria-label="Volumen de preview"
-                className="mt-0.5 w-full" />
-            </label>
-
-            <button type="button" onClick={handlePreview}
-              disabled={isDecoding || isRecording || isPreviewing || !audioUrl || !waveformReady}
-              aria-label="Previsualizar audio"
-              className="w-full rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                        <CollapsibleSection
+              title="Partículas"
+              collapsed={collapsedSections.has("particles")}
+              onToggle={() => toggleSection("particles")}
+              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.6)]" />}
             >
-              {isDecoding ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Decodificando...
-                </span>
-              ) : (
-                "Previsualizar"
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
+                <input type="checkbox" checked={showParticles} onChange={(e) => setShowParticles(e.target.checked)} disabled={isDecoding || isRecording} aria-label="Mostrar partículas" className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+                Activar partículas
+              </label>
+              {showParticles && (
+                <>
+                  <label className="block pt-1">
+                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color</div>
+                    <div className="flex items-center gap-1.5">
+                      <input type="color" value={particleColor} onChange={(e) => setParticleColor(e.target.value)} aria-label="Color de partículas" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+                      <span className="text-[11px] font-mono text-slate-500">{particleColor}</span>
+                    </div>
+                  </label>
+                  <label className="block pt-1">
+                    <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
+                      <span>Opacidad</span>
+                      <span className="tabular-nums text-slate-300">{particleOpacity.toFixed(2)}</span>
+                    </div>
+                    <input type="range" min={0} max={1} step={0.05} value={particleOpacity} onChange={(e) => setParticleOpacity(parseFloat(e.target.value))} className="mt-0.5 w-full" />
+                  </label>
+                </>
               )}
-            </button>
+            </CollapsibleSection>
 
-            <button type="button" onClick={() => void stopAll()}
-              disabled={(!isRecording && !isPreviewing) || isDecoding}
-              aria-label="Detener preview o grabación"
-              className="w-full rounded-lg bg-slate-800/80 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all duration-200 hover:bg-slate-700/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                        <CollapsibleSection
+              title="Texto"
+              collapsed={collapsedSections.has("text")}
+              onToggle={() => toggleSection("text")}
+              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]" />}
             >
-              Detener
-            </button>
+              <div className="flex flex-col gap-1">
+                <input type="text" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} placeholder="Mi canción..."
+                  aria-label="Título de la canción"
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                />
+                <select value={titlePreset} onChange={(e) => setTitlePreset(e.target.value)}
+                  aria-label="Estilo de título"
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                >
+                  {TITLE_PRESETS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-1.5">
+                  <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} aria-label="Color de título" className="h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+                  <span className="text-[11px] font-mono text-slate-500">{titleColor}</span>
+                </div>
+              </div>
+            </CollapsibleSection>
 
             {error ? (
               <div role="alert" className="rounded-lg border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-2 text-xs text-rose-200 shadow-lg shadow-rose-900/10">
@@ -2515,7 +2488,8 @@ export default function AudioVisualizer() {
               onToggle={() => toggleSection("export")}
               icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />}
             >
-              <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Resolución</div>
+
+              <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5 mt-1">Resolución</div>
               <div className="grid grid-cols-3 gap-1">
                 {(["720p", "1080p", "4K"] as const).map((r) => (
                   <button key={r} type="button" onClick={() => setResolution(r)} disabled={isExporting || isRecording}
@@ -2533,10 +2507,15 @@ export default function AudioVisualizer() {
 
               <button type="button" onClick={() => void handleGenerateAndDownloadRealtime()}
                 disabled={isDecoding || isRecording || isExporting || !audioUrl || !waveformReady}
-                aria-label="Generar y descargar video"
+                aria-label="Grabar y descargar video"
                 className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
-                Generar y descargar video
+                <span className="inline-flex items-center gap-1.5">
+                  <svg className="h-4 w-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="8" />
+                  </svg>
+                  Grabar y descargar
+                </span>
               </button>
 
               <div className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-2 py-1 mt-1.5 text-xs leading-relaxed text-amber-300/70">
