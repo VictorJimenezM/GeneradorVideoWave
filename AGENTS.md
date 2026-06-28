@@ -1,6 +1,16 @@
 # GeneradorVideoWave — Agent Guide
 
 ## Commands
+
+### Docker (primary — dev environment)
+```bash
+docker compose up -d          # start dev server on port 3000 (background)
+docker compose restart        # restart container (pick up code changes)
+docker compose down           # stop container
+docker compose logs -f        # follow logs
+```
+
+### Local (alternative — requires node/npm locally)
 ```bash
 npm install          # install dependencies
 npm run dev          # start dev server on port 3000
@@ -20,9 +30,11 @@ src/
 ├── recordrtc.d.ts            # Type declaration for RecordRTC (any)
 ├── vite-env.d.ts             # Vite client types
 ├── components/
-│   └── AudioVisualizerG.tsx  # ~2500 lines — single main component
+│   ├── AudioVisualizerG.tsx  # ~2600 lines — main component
+│   └── IAAsistentPanel.tsx   # IA Asistent checkbox + mode selector + BPM/beat status
 └── hooks/
-    └── useAudioAnalyser.ts   # Micrófono hook (getUserMedia → AnalyserNode, NOT integrated)
+    ├── useAudioAnalyser.ts   # Micrófono hook (getUserMedia → AnalyserNode, NOT integrated)
+    └── useIAAsistent.ts      # IA Asistent hook: BPM detection, beat scheduling, parameter changes
 
 public/
 ├── fondo_muestra_1.png
@@ -31,7 +43,7 @@ public/
 ├── fondo_muestra_4.jpg
 └── fondo_muestra_5.png
 
-Infra: Dockerfile, docker-compose.yml, vercel.json, .cert/
+Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
 ```
 
 ## Internal components (in AudioVisualizerG.tsx)
@@ -64,7 +76,7 @@ type WaveGradientMode = "solid" | "gradient" | "rainbow";
 ## Key architecture
 
 - **Entrypoint**: `src/main.tsx` → `App.tsx` → renders `<AudioVisualizerG />`
-- **Only component**: `src/components/AudioVisualizerG.tsx`
+- **Main component**: `src/components/AudioVisualizerG.tsx`
 - **Styling**: Tailwind CSS v3 (Inter, glass morphism, dark theme, custom scrollbar, animations)
 - Single-page app, no routing, no monorepo.
 
@@ -82,6 +94,7 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 
 | # | Section | Content |
 |---|---------|---------|
+| 0 | — | **IA Asistent** checkbox + mode (agresivo/sensible) + BPM + compás |
 | 1 | **Audio** (collapsible) | File input + drag-drop + file info |
 | 2 | **Onda** (collapsible) | **Forma** (radio, intensidad, grosor), **Color** (color picker, gradiente mode + 2 colors, brillo), **Texto** (input + 10 estilo presets + color picker) |
 | 3 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
@@ -174,6 +187,61 @@ Each has a static preview canvas (80×80) in the UI.
 | Spiral scale | `0.6 + amp * 0.8` | 1.4× |
 | Spiral dotSize | `0.5 + amp * 0.8` | 1.3× |
 | Mandala rotation | `0.5 + amp * 0.375` | 0.875× |
+
+## IA Asistent (feat_ia_controller)
+
+Sistema de control automático de parámetros visuales sincronizado con el ritmo de la canción.
+
+### Componentes
+
+| Archivo | Rol |
+|---------|------|
+| `src/hooks/useIAAsistent.ts` | Hook: BPM detection, beat scheduling, parameter changes |
+| `src/components/IAAsistentPanel.tsx` | UI: checkbox + modo + BPM/beat display |
+
+### Tipos
+
+```typescript
+type IAIAssistantMode = "aggressive" | "sensitive";
+```
+
+### BPM Detection
+
+- **Algoritmo**: Autocorrelación sobre envolvente de energía RMS (ventana 2048, hop 512)
+- Diferenciación para detección de onsets → autocorrelación → mejor lag → BPM
+- Rango detectable: 70–200 BPM
+- Fallback: 120 BPM si la señal es muy corta
+- Se ejecuta en el `useEffect` al activarse o al cargar nuevo audio
+
+### Resolución dinámica según amplitud
+
+El intervalo de beat se ajusta en tiempo real según `getCurrentAmplitude()`:
+
+| Amplitud | Resolución | Factor |
+|----------|-----------|--------|
+| > 0.5 | **Corchea** | interval/2 |
+| 0.2–0.5 | **Negra** | interval |
+| < 0.2 | **Blanca** | interval × 2 |
+
+### Scheduled changes (`applyBeatChanges`)
+
+Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de la onda (intensity, strokeWidth, radiusRatio, glowIntensity se mantienen intactos).
+
+| Cada X beats | Cambios | Prob (agresivo) | Prob (sensible) |
+|-------------|---------|:---:|:---:|
+| 4 | waveColor, waveGradientMode, gradColor1/2, showParticles, particleColor | 85% | 45% |
+| 8 | fractalEnabled, fractalType, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2 | 100% | 70% |
+| 16 | spiralRotationSpeed, spiralTightness, spiralDotSize, mandalaRotationSpeed, mandalaLineWidth, fractalOpacity, spiralColor1, mandalaColor1 | 100% | 90% |
+
+### Integración en AudioVisualizerG.tsx
+
+- **Hook** llamado después de `paramsRef` useEffect (línea ~440)
+- **Ref** `iaStateRef` para acceso desde el closure del `tick()` sin re-renders
+- **Tick**: `ia.update(currentTime, getCurrentAmplitude())` después de `paramsRef.current` (línea ~1288)
+- **Panel**: `<IAAsistentPanel>` renderizado al inicio del sidebar (antes de Reset)
+- **sampleRate** guardado en `sampleRateRef` durante `decodeAudioToMono`
+- **Fondo negro estático**: al activarse la IA, un `useEffect` pone `bgMode="fractal"`, `bgColor="#000000"`, `fractalEnabled=true`, `fractalLayerMode="overlay"`, además de fijar radio=0.50, intensidad=0.70, grosor=1.0 y opacidad partículas=0.10. El fondo nunca cambia mientras la IA está activa.
+- **Visibilidad de controles fractales**: los controles del fractal se muestran también cuando `fractalEnabled=true` aunque `bgMode !== "fractal"` (para que el usuario vea los cambios de la IA).
 
 ## Canvas sizing
 

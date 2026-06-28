@@ -1,5 +1,8 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordRTC from "recordrtc";
+import IAAsistentPanel from "./IAAsistentPanel";
+import { useIAAsistent } from "../hooks/useIAAsistent";
+import type { ControlSetters } from "../hooks/useIAAsistent";
 
 function CollapsibleSection({
   title,
@@ -150,6 +153,7 @@ export default function AudioVisualizer() {
   const monoSamplesRef = useRef<Float32Array | null>(null);
   const totalSamplesRef = useRef<number>(0);
   const durationRef = useRef<number>(0);
+  const sampleRateRef = useRef<number>(0);
 
   // Precomputed circular geometry (unit vectors) for points along duration.
   const precomputedCosRef = useRef<Float32Array | null>(null);
@@ -433,6 +437,52 @@ export default function AudioVisualizer() {
     mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
   ]);
 
+  // --- IA Asistent ---
+  const {
+    isActive: isIAAsistentActive,
+    setIsActive: setIsIAAsistentActive,
+    mode: iaMode,
+    setMode: setIAMode,
+    bpm: iaBpm,
+    currentBeatIndex: iaBeatIndex,
+    update: iaUpdate,
+  } = useIAAsistent({
+    monoSamples: monoSamplesRef.current,
+    sampleRate: sampleRateRef.current,
+    duration: durationRef.current,
+    setters: {
+      setIntensity, setStrokeWidth, setWaveColor, setGlowIntensity,
+      setWaveGradientMode, setGradColor1, setGradColor2, setRadiusRatio,
+      setBgMode, setBgColor,
+      setFractalEnabled, setFractalType, setFractalLayerMode, setFractalOpacity,
+      setRippleSpeed, setRippleAmplitude, setRippleThickness, setRippleColor1, setRippleColor2,
+      setSpiralRotationSpeed, setSpiralTightness, setSpiralDotSize, setSpiralColor1,
+      setMandalaRotationSpeed, setMandalaLineWidth, setMandalaColor1,
+      setShowParticles, setParticleColor, setParticleOpacity,
+    } as ControlSetters,
+  });
+
+  const iaStateRef = useRef({ active: false, update: (_t: number, _a: number) => {} });
+  iaStateRef.current.active = isIAAsistentActive;
+  iaStateRef.current.update = iaUpdate;
+
+  // When IA activates, set background to static black
+  useEffect(() => {
+    if (isIAAsistentActive) {
+      setBgMode("fractal");
+      setBgColor("#000000");
+      setActiveBgPreset(null);
+      setBgImage(null);
+      bgImageRef.current = null;
+      setFractalEnabled(true);
+      setFractalLayerMode("overlay");
+      setRadiusRatio(0.50);
+      setIntensity(0.70);
+      setStrokeWidth(1.0);
+      setParticleOpacity(0.10);
+    }
+  }, [isIAAsistentActive]);
+
   // Apply bg preset
   const applyBgPreset = useCallback((id: string) => {
     const preset = bgPresets.find(p => p.id === id);
@@ -653,6 +703,7 @@ export default function AudioVisualizer() {
       monoSamplesRef.current = mono;
       totalSamplesRef.current = length;
       durationRef.current = audioBuffer.duration;
+      sampleRateRef.current = audioBuffer.sampleRate;
 
       buildPrecomputedGeometry();
       setWaveformReady(true);
@@ -1250,6 +1301,11 @@ export default function AudioVisualizer() {
     const isFractal = p.fractalEnabled;
     const layerMode = p.fractalLayerMode;
     const isRecording = drawingModeRef.current === "record";
+
+    const ia = iaStateRef.current;
+    if (ia.active) {
+      ia.update(currentTime, getCurrentAmplitude());
+    }
 
     // --- 1. DRAW FRACTAL CANVAS (background layer, every frame) ---
     const fractalCanvas = fractalCanvasRef.current;
@@ -1884,6 +1940,16 @@ export default function AudioVisualizer() {
       <div className="flex flex-col gap-4 md:flex-row">
         <aside className="w-full md:w-72 space-y-1 max-h-[calc(100vh-10rem)] overflow-y-auto sidebar-surface">
           <div className="space-y-2 pr-1">
+            {/* IA Asistent */}
+            <IAAsistentPanel
+              isActive={isIAAsistentActive}
+              setIsActive={setIsIAAsistentActive}
+              mode={iaMode}
+              setMode={setIAMode}
+              bpm={iaBpm}
+              currentBeatIndex={iaBeatIndex}
+              audioLoaded={waveformReady}
+            />
             {/* Reset defaults */}
             <button type="button" onClick={resetDefaults}
               aria-label="Restablecer valores predeterminados"
@@ -2182,7 +2248,7 @@ export default function AudioVisualizer() {
 
               {/* FRACTAL sub-menu */}
               <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
-                bgMode === "fractal" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+                (bgMode === "fractal" || fractalEnabled) ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
               }`}>
                 <div className="pt-0.5 space-y-1">
                   <div className="text-xs text-slate-400 italic">Fractal activado</div>
@@ -2195,15 +2261,6 @@ export default function AudioVisualizer() {
                     <option value="ripple">Ondas (Ripple)</option>
                     <option value="spiral">Espiral (Phyllotaxis)</option>
                     <option value="mandala">Mandala</option>
-                  </select>
-
-                  <select value={fractalLayerMode} onChange={(e) => setFractalLayerMode(e.target.value as any)}
-                    disabled={isDecoding || isRecording}
-                    aria-label="Modo de capa fractal"
-                    className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-fuchsia-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                  >
-                    <option value="overlay">Superposición</option>
-                    <option value="replace">Fondo completo</option>
                   </select>
 
                   <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
