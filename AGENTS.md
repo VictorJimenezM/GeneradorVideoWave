@@ -27,14 +27,18 @@ src/
 ├── main.tsx                  # Entrypoint React (StrictMode → App)
 ├── App.tsx                   # Layout: header + AudioVisualizerG + footer + YouTube example
 ├── index.css                 # Tailwind layers, glass/custom scrollbar/range/color/file inputs
+├── ffmpeg.d.ts               # Type declarations for FFmpeg.wasm (FFmpegInstance, Window.FFmpeg)
 ├── recordrtc.d.ts            # Type declaration for RecordRTC (any)
 ├── vite-env.d.ts             # Vite client types
 ├── components/
-│   ├── AudioVisualizerG.tsx  # ~2600 lines — main component
+│   ├── AudioVisualizerG.tsx  # ~2635 lines — main component
+│   ├── ConversionProgress.tsx # Cyberpunk terminal overlay during WebM→MP4 conversion
 │   └── IAAsistentPanel.tsx   # IA Assistant checkbox + mode selector + BPM/beat status + playback controls
-└── hooks/
-    ├── useAudioAnalyser.ts   # Micrófono hook (getUserMedia → AnalyserNode, NOT integrated)
-    └── useIAAsistent.ts      # IA Assistant hook: BPM detection, beat scheduling, parameter changes
+├── hooks/
+│   ├── useAudioAnalyser.ts   # Micrófono hook (getUserMedia → AnalyserNode, NOT integrated)
+│   └── useIAAsistent.ts      # IA Assistant hook: BPM detection, beat scheduling, parameter changes
+└── utils/
+    └── convertWebmToMp4.ts   # FFmpeg.wasm init + WebM→MP4 conversion (ultrafast preset)
 
 public/
 ├── fondo_muestra_1.png
@@ -254,9 +258,11 @@ Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de l
 | **Recording** | `setCanvasVideoSize()` — fixed square: 720 / 1080 / 2160 px |
 | **Fractal** | `syncFractalCanvasSize()` — mirrors waveform canvas size |
 
-## Video recording (.webm with audio)
+## Video recording (.webm → MP4 via FFmpeg.wasm)
 
 Uses `canvas.captureStream(30)` + RecordRTC → `.webm` (VP9). Audio captured via `HTMLMediaElement.captureStream()` (fallback: Web Audio API `createMediaStreamDestination`). Combined `MediaStream` feeds RecordRTC. Tab must be in foreground.
+
+After recording, the WebM blob is converted to MP4 (H.264 + AAC) using FFmpeg.wasm with `-preset ultrafast` (~3-6s for a 4-min song). Output filename matches the input file (e.g. `cancion.mp3` → `cancion.mp4`).
 
 | Resolution | px | Bitrate |
 |------------|----|---------|
@@ -272,8 +278,12 @@ flowchart LR
     F[canvas.captureStream 30fps] --> E[Video MediaStreamTrack]
     D & E --> G[Combined MediaStream]
     G --> H[RecordRTC]
-    H --> I[.webm download]
+    H --> I[.webm blob]
+    I --> J[FFmpeg.wasm]
+    J --> K[.mp4 download]
 ```
+
+FFmpeg.wasm is loaded on mount from CDN (`@ffmpeg/ffmpeg@0.11.6` + `@ffmpeg/core@0.11.0`). If loading fails, falls back to direct WebM download.
 
 ## Key functions
 
@@ -284,6 +294,7 @@ flowchart LR
 | `prepareAndPlay(opts)` | Set audio src, volume, loop, play |
 | `handlePreview()` | Start animation loop in `"preview"` mode |
 | `handleGenerateAndDownloadRealtime()` | Start recording in `"record"` mode |
+| `downloadBlob(blob, extension, customName?)` | Download blob with filename derived from input file or fallback `audio-visualizer-{Date}` |
 | `redrawBackgroundCanvas()` | Redraw fractal canvas when params change (idle only) |
 | `loadSampleBgImage()` | Load first bg image preset (with procedural fallback) |
 
@@ -297,5 +308,5 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 
 ## Pending tasks
 
-- [ ] **Conversión blob webm → mp4**: convertir el blob generado por RecordRTC (.webm VP9) a MP4 (H.264/AAC) para descarga, usando FFmpeg.wasm o MediaRecorder con codec `video/mp4`. Actualmente se descarga en formato webm.
+- [x] **Conversión blob webm → mp4**: convertir el blob generado por RecordRTC (.webm VP9) a MP4 (H.264/AAC) para descarga, usando FFmpeg.wasm (ultrafast preset). La descarga es `.mp4` con el mismo nombre del archivo de entrada.
 
