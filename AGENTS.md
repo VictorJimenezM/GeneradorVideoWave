@@ -31,10 +31,10 @@ src/
 ├── vite-env.d.ts             # Vite client types
 ├── components/
 │   ├── AudioVisualizerG.tsx  # ~2600 lines — main component
-│   └── IAAsistentPanel.tsx   # IA Asistent checkbox + mode selector + BPM/beat status
+│   └── IAAsistentPanel.tsx   # IA Assistant checkbox + mode selector + BPM/beat status + playback controls
 └── hooks/
     ├── useAudioAnalyser.ts   # Micrófono hook (getUserMedia → AnalyserNode, NOT integrated)
-    └── useIAAsistent.ts      # IA Asistent hook: BPM detection, beat scheduling, parameter changes
+    └── useIAAsistent.ts      # IA Assistant hook: BPM detection, beat scheduling, parameter changes
 
 public/
 ├── fondo_muestra_1.png
@@ -94,13 +94,14 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 
 | # | Section | Content |
 |---|---------|---------|
-| 0 | — | **IA Asistent** checkbox + mode (agresivo/sensible) + BPM + compás |
-| 1 | **Audio** (collapsible) | File input + drag-drop + file info |
-| 2 | **Onda** (collapsible) | **Forma** (radio, intensidad, grosor), **Color** (color picker, gradiente mode + 2 colors, brillo), **Texto** (input + 10 estilo presets + color picker) |
-| 3 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
-| 4 | **Fondo** (collapsible, starts collapsed) | 3 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove), **Fractal** (tipo, layer mode, opacidad, reactivo, preview, ripple/spiral/mandala controls) |
-| 5 | — | Waveform preview, Loop preview checkbox, Volumen slider, **Previsualizar**, **Detener** |
-| 6 | **Exportar** (collapsible) | 720p/1080p/4K, botón generar, advertencia foreground |
+| 0 | — | **IA Assistant** checkbox + mode (agresivo/sensible) + BPM + compás + mini waveform + **Volumen slider + [Previsualizar \| Detener] + Loop** |
+| 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
+| 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
+| 3 | **Onda** (collapsible) | **Forma** (radio, intensidad, grosor, brillo), **Color** (color picker + gradiente select side by side, conditional Color 1/2) |
+| 4 | **Fondo** (collapsible) | 3 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove), **Fractal** (tipo, layer mode, opacidad, reactivo, preview, ripple/spiral/mandala controls) |
+| 5 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
+| 6 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
+| 7 | **Exportar** (collapsible) | Resolución 720p/1080p/4K, botón **Grabar y descargar** (icono rojo), advertencia foreground |
 
 ## Preset system
 
@@ -120,8 +121,9 @@ Reset defaults: single `resetDefaults()` button restores all 30+ state variables
 - `bgMode` = `"color"`
 - `fractalEnabled` = `false`
 - `particleOpacity` = `0.7`
-- `collapsedSections` starts with `"bg"` and `"particles"`
+- `collapsedSections` starts with `"presets"`, `"wave"`, `"bg"`, `"particles"`, `"text"`, `"export"` (todo colapsado excepto Audio)
 - Volume = 0.7, Loop = true
+- `radiusRatio` = `0.60`, `intensity` = `0.80`, `strokeWidth` = `1.0`, `glowIntensity` = `0.40`
 
 ## Dual-canvas rendering pipeline
 
@@ -188,7 +190,7 @@ Each has a static preview canvas (80×80) in the UI.
 | Spiral dotSize | `0.5 + amp * 0.8` | 1.3× |
 | Mandala rotation | `0.5 + amp * 0.375` | 0.875× |
 
-## IA Asistent (feat_ia_controller)
+## IA Assistant (feat_ia_controller)
 
 Sistema de control automático de parámetros visuales sincronizado con el ritmo de la canción.
 
@@ -197,7 +199,7 @@ Sistema de control automático de parámetros visuales sincronizado con el ritmo
 | Archivo | Rol |
 |---------|------|
 | `src/hooks/useIAAsistent.ts` | Hook: BPM detection, beat scheduling, parameter changes |
-| `src/components/IAAsistentPanel.tsx` | UI: checkbox + modo + BPM/beat display |
+| `src/components/IAAsistentPanel.tsx` | UI: checkbox + modo + BPM/beat display + controles de playback (volumen, previsualizar/detener, loop) |
 
 ### Tipos
 
@@ -242,6 +244,7 @@ Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de l
 - **sampleRate** guardado en `sampleRateRef` durante `decodeAudioToMono`
 - **Fondo negro estático**: al activarse la IA, un `useEffect` pone `bgMode="fractal"`, `bgColor="#000000"`, `fractalEnabled=true`, `fractalLayerMode="overlay"`, además de fijar radio=0.50, intensidad=0.70, grosor=1.0 y opacidad partículas=0.10. El fondo nunca cambia mientras la IA está activa.
 - **Visibilidad de controles fractales**: los controles del fractal se muestran también cuando `fractalEnabled=true` aunque `bgMode !== "fractal"` (para que el usuario vea los cambios de la IA).
+- **Playback controls**: Volume slider, Previsualizar/Detener buttons y Loop checkbox renderizados dentro de IAAsistentPanel (debajo del mini waveform), eliminados de la sección Exportar.
 
 ## Canvas sizing
 
@@ -292,4 +295,7 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - Returns `{ isRunning, error, fftSize, data: Uint8Array, start, stop }`
 - **Not used** by `AudioVisualizerG` — available for microphone visualization features.
 
+## Pending tasks
+
+- [ ] **Conversión blob webm → mp4**: convertir el blob generado por RecordRTC (.webm VP9) a MP4 (H.264/AAC) para descarga, usando FFmpeg.wasm o MediaRecorder con codec `video/mp4`. Actualmente se descarga en formato webm.
 

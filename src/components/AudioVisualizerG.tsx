@@ -3,6 +3,8 @@ import RecordRTC from "recordrtc";
 import IAAsistentPanel from "./IAAsistentPanel";
 import { useIAAsistent } from "../hooks/useIAAsistent";
 import type { ControlSetters } from "../hooks/useIAAsistent";
+import { initFFmpeg, isFFmpegLoaded, isFFmpegLoading, waitForFFmpeg, convertToMp4 } from "../utils/convertWebmToMp4";
+import ConversionProgress from "./ConversionProgress";
 
 function CollapsibleSection({
   title,
@@ -182,6 +184,12 @@ export default function AudioVisualizer() {
   const [recordError, setRecordError] = useState<string | null>(null);
 
   const [isExporting, setIsExporting] = useState(false);
+
+  // FFmpeg conversion
+  const [ffmpegReady, setFfmpegReady] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convProgress, setConvProgress] = useState(0);
+  const [convLogs, setConvLogs] = useState<string[]>([]);
 
   // Toast notification
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
@@ -1579,7 +1587,47 @@ export default function AudioVisualizer() {
               const blob: Blob | undefined = r.getBlob?.();
               if (!blob) throw new Error("No se generó el video.");
 
-              downloadBlob(blob, "webm");
+              if (isFFmpegLoaded()) {
+                setConverting(true);
+                setConvProgress(0);
+                setConvLogs([]);
+                try {
+                  const mp4 = await convertToMp4(blob, {
+                    onProgress: (pct) => setConvProgress(pct),
+                    onLog: (msg) => setConvLogs(prev => [...prev.slice(-200), msg]),
+                  });
+                  downloadBlob(mp4.blob, "mp4");
+                } catch (convertErr) {
+                  console.warn("Fallback a webm por error en conversión:", convertErr);
+                  downloadBlob(blob, "webm");
+                }
+                setConverting(false);
+              } else if (isFFmpegLoading()) {
+                setConverting(true);
+                setConvLogs(prev => [...prev, "⏳ FFmpeg está cargando, esperando..."]);
+                console.log("[app] FFmpeg cargando, esperamos...");
+                const ready = await waitForFFmpeg();
+                if (ready) {
+                  setConvLogs(prev => [...prev, "✓ FFmpeg listo, iniciando conversión..."]);
+                  try {
+                    const mp4 = await convertToMp4(blob, {
+                      onProgress: (pct) => setConvProgress(pct),
+                      onLog: (msg) => setConvLogs(prev => [...prev.slice(-200), msg]),
+                    });
+                    downloadBlob(mp4.blob, "mp4");
+                  } catch (convertErr) {
+                    console.warn("Fallback a webm:", convertErr);
+                    downloadBlob(blob, "webm");
+                  }
+                } else {
+                  console.warn("[app] FFmpeg no pudo cargarse, fallback a webm");
+                  downloadBlob(blob, "webm");
+                }
+                setConverting(false);
+              } else {
+                console.warn("[app] FFmpeg no disponible, fallback a webm");
+                downloadBlob(blob, "webm");
+              }
             } catch (e: any) {
               setRecordError(e?.message ?? "No se pudo descargar la grabación.");
             }
@@ -1914,6 +1962,9 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     ensureCanvasContext();
+    initFFmpeg()
+      .then(() => { console.log("[app] ✓ FFmpeg listo"); setFfmpegReady(true); })
+      .catch(e => console.warn("[app] ✗ FFmpeg no disponible:", e));
     return () => {
       stopAnimationOnly();
       if (recorderRef.current) {
@@ -2534,6 +2585,12 @@ export default function AudioVisualizer() {
                 </div>
               ) : null}
             </CollapsibleSection>
+            {/* Conversion progress overlay */}
+            <ConversionProgress
+              progress={convProgress}
+              logs={convLogs}
+              visible={converting}
+            />
             {/* Toast notification */}
             {toast && (
               <div
