@@ -128,7 +128,7 @@ export async function convertToMp4(
     "-c:v",
     "libx264",
     "-preset",
-    "fast",
+    "ultrafast",
     "-vsync",
     "cfr",
     "-r",
@@ -137,8 +137,6 @@ export async function convertToMp4(
     "aac",
     "-b:a",
     "128k",
-    "-movflags",
-    "+faststart",
     "output.mp4"
   );
 

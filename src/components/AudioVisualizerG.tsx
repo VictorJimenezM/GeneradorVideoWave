@@ -1475,11 +1475,13 @@ export default function AudioVisualizer() {
     }
   };
 
-  const downloadBlob = (blob: Blob, extension = "webm") => {
+  const downloadBlob = (blob: Blob, extension = "webm", customName?: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `audio-visualizer-${Date.now()}.${extension}`;
+    a.download = customName
+      ? `${customName}.${extension}`
+      : `audio-visualizer-${Date.now()}.${extension}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1567,6 +1569,7 @@ export default function AudioVisualizer() {
 
       recorderRef.current = recorder;
 
+      const outName = fileName.replace(/\.[^.]+$/, '');
       let finished = false;
       const finish = () => {
         if (finished) return;
@@ -1596,10 +1599,10 @@ export default function AudioVisualizer() {
                     onProgress: (pct) => setConvProgress(pct),
                     onLog: (msg) => setConvLogs(prev => [...prev.slice(-200), msg]),
                   });
-                  downloadBlob(mp4.blob, "mp4");
+                  downloadBlob(mp4.blob, "mp4", outName);
                 } catch (convertErr) {
                   console.warn("Fallback a webm por error en conversión:", convertErr);
-                  downloadBlob(blob, "webm");
+                  downloadBlob(blob, "webm", outName);
                 }
                 setConverting(false);
               } else if (isFFmpegLoading()) {
@@ -1614,19 +1617,19 @@ export default function AudioVisualizer() {
                       onProgress: (pct) => setConvProgress(pct),
                       onLog: (msg) => setConvLogs(prev => [...prev.slice(-200), msg]),
                     });
-                    downloadBlob(mp4.blob, "mp4");
+                    downloadBlob(mp4.blob, "mp4", outName);
                   } catch (convertErr) {
                     console.warn("Fallback a webm:", convertErr);
-                    downloadBlob(blob, "webm");
+                    downloadBlob(blob, "webm", outName);
                   }
                 } else {
                   console.warn("[app] FFmpeg no pudo cargarse, fallback a webm");
-                  downloadBlob(blob, "webm");
+                  downloadBlob(blob, "webm", outName);
                 }
                 setConverting(false);
               } else {
                 console.warn("[app] FFmpeg no disponible, fallback a webm");
-                downloadBlob(blob, "webm");
+                downloadBlob(blob, "webm", outName);
               }
             } catch (e: any) {
               setRecordError(e?.message ?? "No se pudo descargar la grabación.");

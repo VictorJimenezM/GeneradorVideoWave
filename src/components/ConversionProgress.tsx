@@ -178,7 +178,7 @@ export default function ConversionProgress({ logs, visible }: Props) {
             className="mt-3 border-t pt-2 text-[10px] uppercase tracking-[0.15em]"
             style={{ borderColor: `${GREEN}15`, color: DARK_GREEN }}
           >
-            ─── esto puede durar unos minutos ───
+            ─── esto puede durar varios minutos (promedio 8 min.) ───
           </div>
         </div>
 
@@ -224,6 +224,16 @@ export default function ConversionProgress({ logs, visible }: Props) {
           <span>
             SYS:{navigator.hardwareConcurrency || "?"}C · {logs.length} líneas
           </span>
+        </div>
+        <div
+          className="mt-1.5 text-center text-[11px] tracking-[0.3em] font-semibold"
+          style={{
+            color: GREEN,
+            textShadow: `0 0 12px ${GREEN}50, 0 0 24px ${GREEN}20`,
+            opacity: 0.85,
+          }}
+        >
+          ✦ Hecho por Audio Dosis ✦
         </div>
       </div>
     </div>
