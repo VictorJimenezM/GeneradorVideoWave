@@ -38,17 +38,28 @@ export default function App() {
               Video de ejemplo
             </h2>
           </div>
-          <div className="contenedor-video rounded-xl border border-slate-700/50">
-            <iframe
-              width="560"
-              height="315"
-              src="https://www.youtube.com/embed/8DkfEmRST10"
-              title="Ejemplo SoundWave Render"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              className="rounded-xl"
-            />
-          </div>
+          <a
+            href="https://youtu.be/8DkfEmRST10"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group relative block overflow-hidden rounded-xl border border-slate-700/50 transition-all duration-200 hover:border-indigo-500/50 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]"
+          >
+            <div className="relative aspect-video">
+              <img
+                src="https://i.ytimg.com/vi/8DkfEmRST10/maxresdefault.jpg"
+                alt="Triste - Gerardo Arias (Muyuqi Reinterpretation)"
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/10">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600/90 shadow-lg transition-transform group-hover:scale-110">
+                  <svg className="ml-1 h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </a>
         </section>
 
         {/* Footer */}
@@ -78,6 +89,7 @@ export default function App() {
             Desarrollado con Vite + React + Tailwind, Cursos, Opencode y Ig Pickle
           </p>
         </footer>
+        <p className="pb-4 text-center text-xs text-slate-600">Version 1.0.0</p>
       </div>
     </div>
   );

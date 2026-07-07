@@ -190,6 +190,8 @@ export default function AudioVisualizer() {
   const [converting, setConverting] = useState(false);
   const [convProgress, setConvProgress] = useState(0);
   const [convLogs, setConvLogs] = useState<string[]>([]);
+  const [convCurrentFrame, setConvCurrentFrame] = useState(0);
+  const [convTotalFrames, setConvTotalFrames] = useState(0);
 
   // Toast notification
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
@@ -264,11 +266,18 @@ export default function AudioVisualizer() {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     () => new Set(["presets", "wave", "bg", "particles", "text", "export"])
   );
+  const exportSectionRef = useRef<HTMLDivElement>(null);
   const toggleSection = useCallback((name: string) => {
     setCollapsedSections((prev) => {
+      const wasCollapsed = prev.has(name);
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
+      if (wasCollapsed) next.delete(name);
       else next.add(name);
+      if (name === "export" && wasCollapsed) {
+        setTimeout(() => {
+          exportSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }, 50);
+      }
       return next;
     });
   }, []);
@@ -1569,7 +1578,7 @@ export default function AudioVisualizer() {
 
       recorderRef.current = recorder;
 
-      const outName = fileName.replace(/\.[^.]+$/, '');
+      const outName = fileName.replace(/\.[^.]+$/, '') + '_swr';
       let finished = false;
       const finish = () => {
         if (finished) return;
@@ -1594,10 +1603,16 @@ export default function AudioVisualizer() {
                 setConverting(true);
                 setConvProgress(0);
                 setConvLogs([]);
+                setConvCurrentFrame(0);
+                setConvTotalFrames(Math.ceil(durationRef.current * 30));
                 try {
                   const mp4 = await convertToMp4(blob, {
                     onProgress: (pct) => setConvProgress(pct),
-                    onLog: (msg) => setConvLogs(prev => [...prev.slice(-200), msg]),
+                    onLog: (msg) => {
+                      setConvLogs(prev => [...prev.slice(-200), msg]);
+                      const m = msg.match(/frame=\s*(\d+)/);
+                      if (m) setConvCurrentFrame(parseInt(m[1], 10));
+                    },
                   });
                   downloadBlob(mp4.blob, "mp4", outName);
                 } catch (convertErr) {
@@ -1608,6 +1623,8 @@ export default function AudioVisualizer() {
               } else if (isFFmpegLoading()) {
                 setConverting(true);
                 setConvLogs(prev => [...prev, "⏳ FFmpeg está cargando, esperando..."]);
+                setConvCurrentFrame(0);
+                setConvTotalFrames(Math.ceil(durationRef.current * 30));
                 console.log("[app] FFmpeg cargando, esperamos...");
                 const ready = await waitForFFmpeg();
                 if (ready) {
@@ -1615,7 +1632,11 @@ export default function AudioVisualizer() {
                   try {
                     const mp4 = await convertToMp4(blob, {
                       onProgress: (pct) => setConvProgress(pct),
-                      onLog: (msg) => setConvLogs(prev => [...prev.slice(-200), msg]),
+                      onLog: (msg) => {
+                        setConvLogs(prev => [...prev.slice(-200), msg]);
+                        const m = msg.match(/frame=\s*(\d+)/);
+                        if (m) setConvCurrentFrame(parseInt(m[1], 10));
+                      },
                     });
                     downloadBlob(mp4.blob, "mp4", outName);
                   } catch (convertErr) {
@@ -2536,6 +2557,7 @@ export default function AudioVisualizer() {
               </div>
             ) : null}
 
+            <div ref={exportSectionRef}>
             <CollapsibleSection
               title="Exportar"
               collapsed={collapsedSections.has("export")}
@@ -2588,11 +2610,14 @@ export default function AudioVisualizer() {
                 </div>
               ) : null}
             </CollapsibleSection>
+            </div>
             {/* Conversion progress overlay */}
             <ConversionProgress
               progress={convProgress}
               logs={convLogs}
               visible={converting}
+              currentFrame={convCurrentFrame}
+              totalFrames={convTotalFrames}
             />
             {/* Toast notification */}
             {toast && (

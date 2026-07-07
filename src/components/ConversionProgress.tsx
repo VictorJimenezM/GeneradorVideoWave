@@ -4,6 +4,8 @@ interface Props {
   progress: number;
   logs: string[];
   visible: boolean;
+  currentFrame?: number;
+  totalFrames?: number;
 }
 
 const FONT = "'Courier New', 'Fira Code', 'Consolas', monospace";
@@ -56,7 +58,7 @@ const AI_MESSAGES = [
 
 const SPINNER = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
-export default function ConversionProgress({ logs, visible }: Props) {
+export default function ConversionProgress({ logs, visible, currentFrame, totalFrames }: Props) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const [msgIndex, setMsgIndex] = useState(0);
   const [spinnerIdx, setSpinnerIdx] = useState(0);
@@ -176,9 +178,9 @@ export default function ConversionProgress({ logs, visible }: Props) {
           </div>
           <div
             className="mt-3 border-t pt-2 text-[10px] uppercase tracking-[0.15em]"
-            style={{ borderColor: `${GREEN}15`, color: DARK_GREEN }}
+            style={{ borderColor: `${GREEN}40`, color: DIM_GREEN }}
           >
-            ─── esto puede durar varios minutos (promedio 8 min.) ───
+            ─── Frame {currentFrame ?? "?"} · {logs.length} líneas · ~{totalFrames ?? "?"} total ───
           </div>
         </div>
 
@@ -198,33 +200,25 @@ export default function ConversionProgress({ logs, visible }: Props) {
               <br />
               <span style={{ color: DARK_GREEN }}>$</span> Cargando motor de conversión...
             </div>
-          ) : (
-            logs.map((line, i) => (
+          ) : (() => {
+            const frameLogs = logs.filter(l => l.includes("frame="));
+            const lastIdx = frameLogs.length - 1;
+            return frameLogs.map((line, i) => (
               <div key={i} className="whitespace-pre-wrap break-all">
                 <span style={{ color: DARK_GREEN }}>{">"}</span>{" "}
                 <span
                   style={{
-                    color: i >= logs.length - 3 ? GREEN : DIM_GREEN,
-                    opacity: i >= logs.length - 3 ? 1 : 0.6,
+                    color: i >= lastIdx - 2 ? GREEN : DIM_GREEN,
+                    opacity: i >= lastIdx - 2 ? 1 : 0.6,
                   }}
                 >
                   {line}
                 </span>
               </div>
-            ))
-          )}
+            ));
+          })()}
         </div>
 
-        {/* Footer status */}
-        <div
-          className="mt-3 flex items-center justify-between text-[10px]"
-          style={{ color: DIM_GREEN }}
-        >
-          <span>◉ TRANSCODING</span>
-          <span>
-            SYS:{navigator.hardwareConcurrency || "?"}C · {logs.length} líneas
-          </span>
-        </div>
         <div
           className="mt-1.5 text-center text-[11px] tracking-[0.3em] font-semibold"
           style={{

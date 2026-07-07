@@ -306,6 +306,15 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - Returns `{ isRunning, error, fftSize, data: Uint8Array, start, stop }`
 - **Not used** by `AudioVisualizerG` — available for microphone visualization features.
 
+## Versioning
+
+- La versión se define como string en `src/App.tsx` al final del layout
+- Se actualiza manualmente antes de cada push a la rama `main`
+- Formato semver: `MAJOR.MINOR.PATCH`
+  - **MAJOR**: cambios incompatibles o rediseño visual grande
+  - **MINOR**: nuevas funcionalidades, secciones o integraciones
+  - **PATCH**: bugfixes, ajustes UI, refactors menores
+
 ## Pending tasks
 
 - [x] **Conversión blob webm → mp4**: convertir el blob generado por RecordRTC (.webm VP9) a MP4 (H.264/AAC) para descarga, usando FFmpeg.wasm (ultrafast preset). La descarga es `.mp4` con el mismo nombre del archivo de entrada.
