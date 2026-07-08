@@ -11,12 +11,14 @@ function CollapsibleSection({
   icon,
   collapsed,
   onToggle,
+  sectionBg,
   children,
 }: {
   title: string;
   icon?: ReactNode;
   collapsed: boolean;
   onToggle: () => void;
+  sectionBg?: string;
   children: ReactNode;
 }) {
   const sectionId = title.toLowerCase().replace(/[\s/]+/g, "-");
@@ -56,7 +58,7 @@ function CollapsibleSection({
           collapsed ? "max-h-0 opacity-0" : "max-h-[2000px] opacity-100"
         }`}
       >
-        <div className="pt-0.5">{children}</div>
+        <div className={`pt-0.5 p-1.5 rounded-lg ${sectionBg || ''}`}>{children}</div>
       </div>
     </div>
   );
@@ -204,11 +206,12 @@ export default function AudioVisualizer() {
 
   // Reset all visual parameters to defaults
   const resetDefaults = useCallback(() => {
+    setShowWave(true);
     setRadiusRatio(0.60);
     setIntensity(0.80);
     setStrokeWidth(1.0);
-    setWaveColor("#6366f1");
-    setBgColor("#020617");
+    setWaveColor("#ffffff");
+    setBgColor("#000000");
     setGlowIntensity(0.4);
     setShowParticles(false);
     setParticleColor("#a78bfa");
@@ -228,23 +231,23 @@ export default function AudioVisualizer() {
     setFractalOpacity(0.8);
     setFractalAudioReactive(true);
     setRippleRingCount(8);
-    setRippleSpeed(1);
-    setRippleAmplitude(20);
-    setRippleThickness(1.5);
-    setRippleColor1("#6366f1");
-    setRippleColor2("#a855f7");
-    setSpiralDensity(200);
-    setSpiralRotationSpeed(0.8);
-    setSpiralTightness(0.5);
-    setSpiralDotSize(2);
-    setSpiralColor1("#6366f1");
-    setSpiralColor2("#06b6d4");
-    setMandalaSegments(8);
-    setMandalaRotationSpeed(0.6);
-    setMandalaComplexity(3);
-    setMandalaLineWidth(1.5);
-    setMandalaColor1("#a78bfa");
-    setMandalaColor2("#f472b6");
+    setRippleSpeed(0.1);
+    setRippleAmplitude(60);
+    setRippleThickness(14.5);
+    setRippleColor1("#1bff0a");
+    setRippleColor2("#1119e8");
+    setSpiralDensity(320);
+    setSpiralRotationSpeed(0.0);
+    setSpiralTightness(0.95);
+    setSpiralDotSize(11.5);
+    setSpiralColor1("#e3e3f2");
+    setSpiralColor2("#ee8c2f");
+    setMandalaSegments(14);
+    setMandalaRotationSpeed(0.0);
+    setMandalaComplexity(6);
+    setMandalaLineWidth(19.5);
+    setMandalaColor1("#4910f4");
+    setMandalaColor2("#fbff24");
     setBgImage(null);
     bgImageRef.current = null;
     setBgImagePreset("custom");
@@ -264,7 +267,7 @@ export default function AudioVisualizer() {
 
   // Collapsible sections (Fondo and Partículas start collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(["presets", "wave", "bg", "particles", "text", "export"])
+    () => new Set(["presets", "wave", "bg", "fractal", "particles", "text", "export"])
   );
   const exportSectionRef = useRef<HTMLDivElement>(null);
   const toggleSection = useCallback((name: string) => {
@@ -348,25 +351,25 @@ export default function AudioVisualizer() {
   const [fractalAudioReactive, setFractalAudioReactive] = useState(true);
 
   const [rippleRingCount, setRippleRingCount] = useState(8);
-  const [rippleSpeed, setRippleSpeed] = useState(1);
-  const [rippleAmplitude, setRippleAmplitude] = useState(20);
-  const [rippleThickness, setRippleThickness] = useState(1.5);
-  const [rippleColor1, setRippleColor1] = useState("#6366f1");
-  const [rippleColor2, setRippleColor2] = useState("#a855f7");
+  const [rippleSpeed, setRippleSpeed] = useState(0.1);
+  const [rippleAmplitude, setRippleAmplitude] = useState(60);
+  const [rippleThickness, setRippleThickness] = useState(14.5);
+  const [rippleColor1, setRippleColor1] = useState("#1bff0a");
+  const [rippleColor2, setRippleColor2] = useState("#1119e8");
 
-  const [spiralDensity, setSpiralDensity] = useState(200);
-  const [spiralRotationSpeed, setSpiralRotationSpeed] = useState(0.8);
-  const [spiralTightness, setSpiralTightness] = useState(0.5);
-  const [spiralDotSize, setSpiralDotSize] = useState(2);
-  const [spiralColor1, setSpiralColor1] = useState("#6366f1");
-  const [spiralColor2, setSpiralColor2] = useState("#06b6d4");
+  const [spiralDensity, setSpiralDensity] = useState(320);
+  const [spiralRotationSpeed, setSpiralRotationSpeed] = useState(0.0);
+  const [spiralTightness, setSpiralTightness] = useState(0.95);
+  const [spiralDotSize, setSpiralDotSize] = useState(11.5);
+  const [spiralColor1, setSpiralColor1] = useState("#e3e3f2");
+  const [spiralColor2, setSpiralColor2] = useState("#ee8c2f");
 
-  const [mandalaSegments, setMandalaSegments] = useState(8);
-  const [mandalaRotationSpeed, setMandalaRotationSpeed] = useState(0.6);
-  const [mandalaComplexity, setMandalaComplexity] = useState(3);
-  const [mandalaLineWidth, setMandalaLineWidth] = useState(1.5);
-  const [mandalaColor1, setMandalaColor1] = useState("#a78bfa");
-  const [mandalaColor2, setMandalaColor2] = useState("#f472b6");
+  const [mandalaSegments, setMandalaSegments] = useState(14);
+  const [mandalaRotationSpeed, setMandalaRotationSpeed] = useState(0.0);
+  const [mandalaComplexity, setMandalaComplexity] = useState(6);
+  const [mandalaLineWidth, setMandalaLineWidth] = useState(19.5);
+  const [mandalaColor1, setMandalaColor1] = useState("#4910f4");
+  const [mandalaColor2, setMandalaColor2] = useState("#fbff24");
 
   // --- WAVEFORM PREVIEW ---
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -387,13 +390,15 @@ export default function AudioVisualizer() {
   const [bgImagePreset, setBgImagePreset] = useState<string>("custom");
 
   // Live parameters (state + refs for drawing loop).
+  const [showWave, setShowWave] = useState(true);
   const [radiusRatio, setRadiusRatio] = useState(0.60); // radio base = min(cx,cy) * ratio
   const [intensity, setIntensity] = useState(0.80); // amp radius = radiusBase * intensity
   const [strokeWidth, setStrokeWidth] = useState(1.0);
-  const [waveColor, setWaveColor] = useState("#6366f1"); // indigo-500
-  const [bgColor, setBgColor] = useState("#020617"); // slate-950
+  const [waveColor, setWaveColor] = useState("#ffffff");
+  const [bgColor, setBgColor] = useState("#000000");
 
   const paramsRef = useRef({
+    showWave,
     radiusRatio,
     intensity,
     strokeWidth,
@@ -436,7 +441,7 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     paramsRef.current = {
-      radiusRatio, intensity, strokeWidth, waveColor, bgColor,
+      showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor,
       songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
       fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
@@ -446,7 +451,7 @@ export default function AudioVisualizer() {
     bgImageRef.current = bgImage;
     redrawBackgroundCanvas();
   }, [
-    radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage,
+    showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage,
     songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
     fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
@@ -1057,7 +1062,7 @@ export default function AudioVisualizer() {
       const t = i / Math.max(1, count - 1);
       const baseR = maxR * (0.05 + t * 0.95);
       const phase = now * speed * (0.8 + t * 0.4) + i * 1.5;
-      const waveFreq = 4 + i * 1.8;
+      const waveFreq = Math.round(4 + i * 1.8);
 
       ctx.lineWidth = thickness * (0.5 + t * 0.5);
       ctx.strokeStyle = hexToRgba(
@@ -1090,8 +1095,8 @@ export default function AudioVisualizer() {
     const density = p.spiralDensity;
     const now = performance.now() / 1000;
 
-    const rotationSpeed = p.spiralRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.375) : 1);
-    const scale = p.spiralTightness * maxR * 0.06 * (p.fractalAudioReactive ? (0.6 + amp * 0.8) : 1);
+    const rotationSpeed = p.spiralRotationSpeed * (p.fractalAudioReactive ? (0.7 + amp * 0.15) : 1);
+    const scale = p.spiralTightness * maxR * 0.06 * (0.6 + amp * 0.8);
     const dotSize = p.spiralDotSize * (p.fractalAudioReactive ? (0.5 + amp * 0.8) : 1);
     const rotationOffset = now * rotationSpeed;
 
@@ -1132,7 +1137,7 @@ export default function AudioVisualizer() {
 
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(now * rotationSpeed);
+    ctx.rotate(now * rotationSpeed * 0.15);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -1380,17 +1385,18 @@ export default function AudioVisualizer() {
       lastCurvePointRef.current = null;
     }
 
-    const last = lastDrawnPointIndexRef.current;
-    if (last < 0) {
-      lastDrawnPointIndexRef.current = 0;
-      lastCurvePointRef.current = getPointXY(0);
-      if (head > 0) drawAdditionalPath(0, head);
-    } else if (head > last) {
-      drawAdditionalPath(last, head);
-      lastDrawnPointIndexRef.current = head;
+    if (paramsRef.current.showWave) {
+      const last = lastDrawnPointIndexRef.current;
+      if (last < 0) {
+        lastDrawnPointIndexRef.current = 0;
+        lastCurvePointRef.current = getPointXY(0);
+        if (head > 0) drawAdditionalPath(0, head);
+      } else if (head > last) {
+        drawAdditionalPath(last, head);
+        lastDrawnPointIndexRef.current = head;
+      }
+      drawTip(progress01);
     }
-
-    drawTip(progress01);
     drawTitle(ctx, canvas);
     if (paramsRef.current.showParticles) updateAndDrawParticles(ctx);
 
@@ -1805,7 +1811,7 @@ export default function AudioVisualizer() {
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
       spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
       mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
-      waveColor, waveGradientMode, gradColor1, gradColor2,
+      showWave, waveColor, waveGradientMode, gradColor1, gradColor2,
       glowIntensity, showParticles, particleColor, particleOpacity,
       radiusRatio, intensity, strokeWidth,
       songTitle, titleColor, titlePreset,
@@ -1823,7 +1829,7 @@ export default function AudioVisualizer() {
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
     spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
     mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
-    waveColor, waveGradientMode, gradColor1, gradColor2,
+    showWave, waveColor, waveGradientMode, gradColor1, gradColor2,
     glowIntensity, showParticles, particleColor, particleOpacity,
     radiusRatio, intensity, strokeWidth,
     songTitle, titleColor, titlePreset, showToast]);
@@ -1878,6 +1884,7 @@ export default function AudioVisualizer() {
       setGradColor1(saved.gradColor1);
       setGradColor2(saved.gradColor2);
       setGlowIntensity(saved.glowIntensity);
+      setShowWave(saved.showWave ?? true);
       setShowParticles(saved.showParticles);
       setParticleColor(saved.particleColor);
       setParticleOpacity(saved.particleOpacity);
@@ -2013,9 +2020,7 @@ export default function AudioVisualizer() {
   return (
     <section className="glass glass-hover animate-fade-in overflow-hidden p-4">
       <div className="flex flex-col gap-4 md:flex-row">
-        <aside className="w-full md:w-72 space-y-1 max-h-[calc(100vh-10rem)] overflow-y-auto sidebar-surface">
-          <div className="space-y-2 pr-1">
-            {/* IA Asistent */}
+        <aside className="w-full md:w-72 sidebar-surface">
             <IAAsistentPanel
               isActive={isIAAsistentActive}
               setIsActive={setIsIAAsistentActive}
@@ -2037,12 +2042,16 @@ export default function AudioVisualizer() {
               setIsLoopingUI={setIsLoopingUI}
               audioUrl={audioUrl}
               audioRef={audioRef}
+              onCollapseAll={() => setCollapsedSections(new Set(["audio", "presets", "wave", "bg", "fractal", "particles", "text", "export"]))}
+              onResetDefaults={resetDefaults}
             />
+          <div className="space-y-2 pr-1 overflow-y-auto max-h-[calc(100vh-16rem)]">
             <CollapsibleSection
               title="Audio"
               collapsed={collapsedSections.has("audio")}
               onToggle={() => toggleSection("audio")}
               icon={<div aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.6)]" />}
+              sectionBg="bg-indigo-950/30"
             >
               <div className="flex flex-col gap-1">
                 <FileDropZone onDrop={(file) => onPickFile(file)}>
@@ -2076,6 +2085,7 @@ export default function AudioVisualizer() {
               collapsed={collapsedSections.has("presets")}
               onToggle={() => toggleSection("presets")}
               icon={<div aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]" />}
+              sectionBg="bg-amber-950/30"
             >
               {(() => {
                 const presets = [
@@ -2126,7 +2136,12 @@ export default function AudioVisualizer() {
               collapsed={collapsedSections.has("wave")}
               onToggle={() => toggleSection("wave")}
               icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.6)]" />}
+              sectionBg="bg-cyan-950/30"
             >
+              <label className="flex items-center gap-2 pb-1.5 cursor-pointer">
+                <input type="checkbox" checked={showWave} onChange={(e) => setShowWave(e.target.checked)} disabled={isDecoding || isRecording} className="accent-cyan-500 w-3.5 h-3.5 rounded border-slate-700 bg-slate-900" />
+                <span className="text-xs font-medium text-slate-300 tracking-wide select-none">Mostrar onda</span>
+              </label>
               <div className="text-[11px] font-semibold tracking-wider text-cyan-400/50 uppercase pb-0.5">Forma</div>
               <label className="block">
                 <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
@@ -2207,20 +2222,21 @@ export default function AudioVisualizer() {
               collapsed={collapsedSections.has("bg")}
               onToggle={() => toggleSection("bg")}
               icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.6)]" />}
+              sectionBg="bg-violet-950/30"
             >
-              {/* Mode selector: Color | Imagen | Fractal */}
-              <div className="grid grid-cols-3 gap-1 pb-1.5">
-                {(["color", "image", "fractal"] as const).map((mode) => (
+              {/* Mode selector: Color | Imagen */}
+              <div className="grid grid-cols-2 gap-1 pb-1.5">
+                {(["color", "image"] as const).map((mode) => (
                   <button key={mode} type="button" onClick={() => handleBgModeChange(mode)}
                     disabled={isDecoding || isRecording}
-                    aria-label={`Modo fondo: ${mode === "color" ? "Color" : mode === "image" ? "Imagen" : "Fractal"}`}
+                    aria-label={`Modo fondo: ${mode === "color" ? "Color" : "Imagen"}`}
                     className={`rounded-lg px-1.5 py-1 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
                       bgMode === mode
                         ? "bg-violet-500/20 text-violet-300 border border-violet-500/40"
                         : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
                     }`}
                   >
-                    {mode === "color" ? "Color" : mode === "image" ? "Imagen" : "Fractal"}
+                    {mode === "color" ? "Color" : "Imagen"}
                   </button>
                 ))}
               </div>
@@ -2293,13 +2309,26 @@ export default function AudioVisualizer() {
                 </div>
               </div>
 
-              {/* FRACTAL sub-menu */}
-              <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
-                (bgMode === "fractal" || fractalEnabled) ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
-              }`}>
-                <div className="pt-0.5 space-y-1">
-                  <div className="text-xs text-slate-400 italic">Fractal activado</div>
+            </CollapsibleSection>
 
+            <CollapsibleSection
+              title="Fractal"
+              collapsed={collapsedSections.has("fractal")}
+              onToggle={() => toggleSection("fractal")}
+              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(192,38,211,0.6)]" />}
+              sectionBg="bg-fuchsia-950/30"
+            >
+              <div className="space-y-1">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
+                    <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)}
+                      disabled={isDecoding || isRecording} aria-label="Activar fractal"
+                      className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                    />
+                    Activar fractal
+                  </label>
+
+                  {fractalEnabled && (
+                    <>
                   <select value={fractalType} onChange={(e) => setFractalType(e.target.value as any)}
                     disabled={isDecoding || isRecording}
                     aria-label="Tipo de fractal"
@@ -2364,7 +2393,7 @@ export default function AudioVisualizer() {
                           <span>Grosor</span>
                           <span className="tabular-nums text-slate-300">{rippleThickness.toFixed(1)}</span>
                         </div>
-                        <input type="range" min={0.5} max={6} step={0.5} value={rippleThickness} onChange={(e) => setRippleThickness(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                        <input type="range" min={0.5} max={18} step={0.5} value={rippleThickness} onChange={(e) => setRippleThickness(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                       </label>
                       <div className="grid grid-cols-2 gap-1.5">
                         <label className="block">
@@ -2401,7 +2430,7 @@ export default function AudioVisualizer() {
                           <span>Rotación</span>
                           <span className="tabular-nums text-slate-300">{spiralRotationSpeed.toFixed(1)}</span>
                         </div>
-                        <input type="range" min={-3} max={3} step={0.1} value={spiralRotationSpeed} onChange={(e) => setSpiralRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                        <input type="range" min={0} max={1} step={0.05} value={spiralRotationSpeed} onChange={(e) => setSpiralRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                       </label>
                       <label className="block">
                         <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
@@ -2415,7 +2444,7 @@ export default function AudioVisualizer() {
                           <span>Tamaño punto</span>
                           <span className="tabular-nums text-slate-300">{spiralDotSize.toFixed(1)}</span>
                         </div>
-                        <input type="range" min={0.5} max={6} step={0.5} value={spiralDotSize} onChange={(e) => setSpiralDotSize(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                        <input type="range" min={3} max={12} step={0.5} value={spiralDotSize} onChange={(e) => setSpiralDotSize(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                       </label>
                       <div className="grid grid-cols-2 gap-1.5">
                         <label className="block">
@@ -2452,7 +2481,7 @@ export default function AudioVisualizer() {
                           <span>Rotación</span>
                           <span className="tabular-nums text-slate-300">{mandalaRotationSpeed.toFixed(1)}</span>
                         </div>
-                        <input type="range" min={-3} max={3} step={0.1} value={mandalaRotationSpeed} onChange={(e) => setMandalaRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                        <input type="range" min={0} max={1} step={0.1} value={mandalaRotationSpeed} onChange={(e) => setMandalaRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                       </label>
                       <label className="block">
                         <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
@@ -2466,7 +2495,7 @@ export default function AudioVisualizer() {
                           <span>Grosor línea</span>
                           <span className="tabular-nums text-slate-300">{mandalaLineWidth.toFixed(1)}</span>
                         </div>
-                        <input type="range" min={0.5} max={5} step={0.5} value={mandalaLineWidth} onChange={(e) => setMandalaLineWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                        <input type="range" min={0.5} max={20} step={1} value={mandalaLineWidth} onChange={(e) => setMandalaLineWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                       </label>
                       <div className="grid grid-cols-2 gap-1.5">
                         <label className="block">
@@ -2486,8 +2515,9 @@ export default function AudioVisualizer() {
                       </div>
                     </div>
                   )}
+                    </>
+                  )}
                 </div>
-              </div>
             </CollapsibleSection>
 
                         <CollapsibleSection
@@ -2495,6 +2525,7 @@ export default function AudioVisualizer() {
               collapsed={collapsedSections.has("particles")}
               onToggle={() => toggleSection("particles")}
               icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.6)]" />}
+              sectionBg="bg-sky-950/30"
             >
               <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
                 <input type="checkbox" checked={showParticles} onChange={(e) => setShowParticles(e.target.checked)} disabled={isDecoding || isRecording} aria-label="Mostrar partículas" className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
@@ -2525,6 +2556,7 @@ export default function AudioVisualizer() {
               collapsed={collapsedSections.has("text")}
               onToggle={() => toggleSection("text")}
               icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]" />}
+              sectionBg="bg-rose-950/30"
             >
               <div className="flex flex-col gap-1">
                 <input type="text" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} placeholder="Mi canción..."
@@ -2563,6 +2595,7 @@ export default function AudioVisualizer() {
               collapsed={collapsedSections.has("export")}
               onToggle={() => toggleSection("export")}
               icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />}
+              sectionBg="bg-emerald-950/30"
             >
 
               <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5 mt-1">Resolución</div>

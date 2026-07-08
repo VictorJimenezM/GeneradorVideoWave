@@ -22,6 +22,8 @@ interface Props {
   setIsLoopingUI: (v: boolean) => void;
   audioUrl: string | null;
   audioRef: RefObject<HTMLAudioElement | null>;
+  onCollapseAll: () => void;
+  onResetDefaults?: () => void;
 }
 
 export default function IAAsistentPanel({
@@ -45,6 +47,8 @@ export default function IAAsistentPanel({
   setIsLoopingUI,
   audioUrl,
   audioRef,
+  onCollapseAll,
+  onResetDefaults,
 }: Props) {
   return (
     <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 p-2 space-y-1.5">
@@ -59,6 +63,14 @@ export default function IAAsistentPanel({
         <span className="text-xs font-semibold tracking-wider text-violet-300 uppercase">
           IA Assistant
         </span>
+        {onResetDefaults && (
+          <button type="button" onClick={onResetDefaults}
+            className="ml-auto rounded px-1.5 py-0.5 text-[11px] text-slate-600 hover:text-slate-300 hover:bg-slate-800/40 transition-all"
+            title="Restablecer valores de fábrica"
+          >
+            ↺
+          </button>
+        )}
       </label>
 
       {!audioLoaded && (
@@ -161,13 +173,24 @@ export default function IAAsistentPanel({
         </button>
       </div>
 
-      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-        <input type="checkbox" checked={isLoopingUI} onChange={(e) => { const v = e.target.checked; setIsLoopingUI(v); if (audioRef.current) audioRef.current.loop = v; }}
-          disabled={isRecording} aria-label="Activar loop de preview"
-          className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-        />
-        Loop preview
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
+          <input type="checkbox" checked={isLoopingUI} onChange={(e) => { const v = e.target.checked; setIsLoopingUI(v); if (audioRef.current) audioRef.current.loop = v; }}
+            disabled={isRecording} aria-label="Activar loop de preview"
+            className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+          />
+          Loop preview
+        </label>
+        <button type="button" onClick={onCollapseAll}
+          aria-label="Colapsar todos los menús"
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-slate-500 transition-all duration-200 hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+        >
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+          </svg>
+          Colapsar
+        </button>
+      </div>
     </div>
   );
 }

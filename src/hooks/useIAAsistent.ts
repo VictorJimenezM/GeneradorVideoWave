@@ -153,7 +153,7 @@ function applyBeatChanges(
   }
 
   if (beatIndex > 0 && beatIndex % 16 === 0 && Math.random() < per16) {
-    s.setSpiralRotationSpeed(rnd(0.3, 1.5));
+    s.setSpiralRotationSpeed(rnd(0.1, 0.6));
     s.setSpiralTightness(rnd(0.1, 0.4));
     s.setSpiralDotSize(rnd(4, 6));
     s.setMandalaRotationSpeed(rnd(0.3, 1.5));
