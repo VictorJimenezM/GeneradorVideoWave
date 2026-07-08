@@ -1,120 +1,33 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordRTC from "recordrtc";
 import IAAsistentPanel from "./IAAsistentPanel";
 import { useIAAsistent } from "../hooks/useIAAsistent";
 import type { ControlSetters } from "../hooks/useIAAsistent";
 import { initFFmpeg, isFFmpegLoaded, isFFmpegLoading, waitForFFmpeg, convertToMp4 } from "../utils/convertWebmToMp4";
 import ConversionProgress from "./ConversionProgress";
+import CollapsibleSection from "./CollapsibleSection";
+import FileDropZone from "./FileDropZone";
+import AudioSection from "./sidebar/AudioSection";
+import PresetsSection from "./sidebar/PresetsSection";
+import WaveSection from "./sidebar/WaveSection";
+import BgSection from "./sidebar/BgSection";
+import FractalSection from "./sidebar/FractalSection";
+import InstinctSection from "./sidebar/InstinctSection";
+import ParticlesSection from "./sidebar/ParticlesSection";
+import TextSection from "./sidebar/TextSection";
+import ExportSection from "./sidebar/ExportSection";
+import type { FractalType, FractalParams } from "../utils/fractals";
+import type { InstinctMode, InstinctParams } from "../utils/instinct";
+import { drawFractalBackground as drawFractalBg, drawFractalPreview as drawFractalPrev, TWO_PI, clamp, hexToRgba } from "../utils/fractals";
+import { drawInstinctFractal, drawInstinctPreview } from "../utils/instinct";
+import { fftLikePointsPerCircle, getPointXY, drawAdditionalPath, drawTip, drawStaticWaveform, type Point, type WaveStyle } from "../utils/wave";
+import { emitParticles, updateAndDrawParticles } from "../utils/particles";
+import { TITLE_PRESETS, drawTitle } from "../utils/title";
+import { bgPresets, drawFondoCanvas } from "../utils/fondo";
+import { syncAllCanvasSizes as syncSizes, setCanvasVideoSize as setVideoSize, clearCanvasSolid as clearCanvas } from "../utils/canvas";
+import { buildPrecomputedGeometry as buildGeo, getCurrentAmplitude as getAmp } from "../utils/audio";
 
-function CollapsibleSection({
-  title,
-  icon,
-  collapsed,
-  onToggle,
-  sectionBg,
-  children,
-}: {
-  title: string;
-  icon?: ReactNode;
-  collapsed: boolean;
-  onToggle: () => void;
-  sectionBg?: string;
-  children: ReactNode;
-}) {
-  const sectionId = title.toLowerCase().replace(/[\s/]+/g, "-");
-  const labelId = `${sectionId}-label`;
 
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-        aria-controls={sectionId}
-        className="flex w-full items-center gap-1.5 py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 rounded-sm"
-      >
-        {icon}
-        <span id={labelId} className="text-xs font-semibold tracking-wider text-slate-400 uppercase flex-1">
-          {title}
-        </span>
-        <svg
-          aria-hidden="true"
-          className={`h-2.5 w-2.5 text-slate-500 transition-transform duration-200 ${
-            collapsed ? "" : "rotate-90"
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-      <div
-        id={sectionId}
-        role="region"
-        aria-labelledby={labelId}
-        className={`overflow-hidden transition-all duration-250 ease-in-out ${
-          collapsed ? "max-h-0 opacity-0" : "max-h-[2000px] opacity-100"
-        }`}
-      >
-        <div className={`pt-0.5 p-1.5 rounded-lg ${sectionBg || ''}`}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function FileDropZone({
-  onDrop,
-  children,
-}: {
-  onDrop: (file: File) => void;
-  children: ReactNode;
-}) {
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) onDrop(file);
-  };
-
-  return (
-    <div
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`relative rounded-lg transition-all duration-200 ${
-        isDragOver
-          ? "border-2 border-dashed border-indigo-400/60 bg-indigo-500/10"
-          : ""
-      }`}
-    >
-      {children}
-      {isDragOver && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-950/70 text-xs font-medium text-indigo-300 z-10 pointer-events-none">
-          Suelta el archivo aquí
-        </div>
-      )}
-    </div>
-  );
-}
-
-const TWO_PI = Math.PI * 2;
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -126,30 +39,27 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function hexToRgba(hex: string, alpha: number) {
-  const h = hex.replace("#", "").trim();
-  const full =
-    h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0").slice(0, 6);
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  const a = clamp(alpha, 0, 1);
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-type Point = { x: number; y: number };
-
 export default function AudioVisualizer() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const ondaCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ondaCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  const fondoCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fondoCtxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   const fractalCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const fractalCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  const instinctCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const instinctCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  const tempCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const tempCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
   const fractalPreviewRef = useRef<HTMLCanvasElement | null>(null);
+  const instinctPreviewRef = useRef<HTMLCanvasElement | null>(null);
+
+  const letrasCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const letrasCtxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -249,6 +159,11 @@ export default function AudioVisualizer() {
     setMandalaLineWidth(19.5);
     setMandalaColor1("#4910f4");
     setMandalaColor2("#fbff24");
+    setInstinctMode("water");
+    setInstinctSpeed(1.0);
+    setInstinctStrength(25);
+    setInstinctFrequency(0.01);
+    setInstinctEnabled(false);
     setBgImage(null);
     bgImageRef.current = null;
     setBgImagePreset("custom");
@@ -268,7 +183,7 @@ export default function AudioVisualizer() {
 
   // Collapsible sections (Fondo and Partículas start collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(["presets", "wave", "bg", "fractal", "particles", "text", "export"])
+    () => new Set(["presets", "wave", "bg", "fractal", "instinct", "particles", "text", "export"])
   );
   const exportSectionRef = useRef<HTMLDivElement>(null);
   const toggleSection = useCallback((name: string) => {
@@ -291,19 +206,6 @@ export default function AudioVisualizer() {
   const [songTitle, setSongTitle] = useState("");
   const [titleColor, setTitleColor] = useState("#ffffff");
   const [titlePreset, setTitlePreset] = useState("bottom-center");
-
-  const TITLE_PRESETS = [
-    { id: "bottom-center", label: "Inferior centro", font: "Arial, sans-serif", weight: "bold", size: 0.035, align: "center", valign: "bottom", y: 0.93 },
-    { id: "bottom-left", label: "Inferior izquierda", font: "Arial, sans-serif", weight: "bold", size: 0.03, align: "left", valign: "bottom", y: 0.93, x: 0.04 },
-    { id: "bottom-right", label: "Inferior derecha", font: "Arial, sans-serif", weight: "bold", size: 0.03, align: "right", valign: "bottom", y: 0.93, x: 0.96 },
-    { id: "center-big", label: "Centro grande", font: "Georgia, serif", weight: "bold", size: 0.07, align: "center", valign: "middle", y: 0.5 },
-    { id: "center-medium", label: "Centro medio", font: "Arial, sans-serif", weight: "bold", size: 0.045, align: "center", valign: "middle", y: 0.5 },
-    { id: "top-center", label: "Superior centro", font: "Arial, sans-serif", weight: "bold", size: 0.03, align: "center", valign: "top", y: 0.06 },
-    { id: "top-left", label: "Superior izquierda", font: "Arial, sans-serif", weight: "normal", size: 0.025, align: "left", valign: "top", y: 0.06, x: 0.04 },
-    { id: "top-right", label: "Superior derecha", font: "Arial, sans-serif", weight: "normal", size: 0.025, align: "right", valign: "top", y: 0.06, x: 0.96 },
-    { id: "center-elegant", label: "Centro elegante", font: "Georgia, serif", weight: "normal", size: 0.05, align: "center", valign: "middle", y: 0.5 },
-    { id: "compact", label: "Compacto", font: "'Courier New', monospace", weight: "bold", size: 0.02, align: "center", valign: "bottom", y: 0.95 },
-  ];
 
   // UI / audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -336,17 +238,10 @@ export default function AudioVisualizer() {
 
   // --- BACKGROUND PRESETS ---
   const [activeBgPreset, setActiveBgPreset] = useState<string | null>(null);
-  const bgPresets = [
-    { id: "dark", label: "Oscuro", color: "#020617" },
-    { id: "purple", label: "Púrpura", color: "#1e1b4b" },
-    { id: "cyan", label: "Cian", color: "#164e63" },
-    { id: "emerald", label: "Esmeralda", color: "#064e3b" },
-    { id: "warm", label: "Cálido", color: "#451a03" },
-  ];
 
   // --- FRACTAL ---
   const [fractalEnabled, setFractalEnabled] = useState(false);
-  const [fractalType, setFractalType] = useState<"ripple" | "spiral" | "mandala">("ripple");
+  const [fractalType, setFractalType] = useState<FractalType>("ripple");
   const [fractalLayerMode, setFractalLayerMode] = useState<"replace" | "overlay">("overlay");
   const [fractalOpacity, setFractalOpacity] = useState(0.8);
   const [fractalAudioReactive, setFractalAudioReactive] = useState(true);
@@ -371,6 +266,29 @@ export default function AudioVisualizer() {
   const [mandalaLineWidth, setMandalaLineWidth] = useState(19.5);
   const [mandalaColor1, setMandalaColor1] = useState("#4910f4");
   const [mandalaColor2, setMandalaColor2] = useState("#fbff24");
+
+  // --- INSTINCT ---
+  const [instinctMode, setInstinctMode] = useState<InstinctMode>("water");
+  const [instinctSpeed, setInstinctSpeed] = useState(1.0);
+  const [instinctStrength, setInstinctStrength] = useState(25);
+  const [instinctFrequency, setInstinctFrequency] = useState(0.01);
+  const [instinctEnabled, setInstinctEnabled] = useState(false);
+
+  // --- LAYER ORDER (excluding fondo - it's always bottom) ---
+  const [layerOrder, setLayerOrder] = useState<string[]>(["fractal", "instinct", "onda", "letras"]);
+
+  const moveLayer = useCallback((layer: string, dir: number) => {
+    setLayerOrder(prev => {
+      const idx = prev.indexOf(layer);
+      if (idx < 0) return prev;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      next.splice(idx, 1);
+      next.splice(newIdx, 0, layer);
+      return next;
+    });
+  }, []);
 
   // --- WAVEFORM PREVIEW ---
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -440,6 +358,14 @@ export default function AudioVisualizer() {
     mandalaColor2,
   });
 
+  const instinctParamsRef = useRef({
+    enabled: false,
+    mode: "water" as InstinctMode,
+    speed: 1.0,
+    strength: 25,
+    frequency: 0.01,
+  });
+
   useEffect(() => {
     paramsRef.current = {
       showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor,
@@ -450,7 +376,8 @@ export default function AudioVisualizer() {
       mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
     };
     bgImageRef.current = bgImage;
-    redrawBackgroundCanvas();
+    redrawFondoCanvas();
+    redrawFractalCanvas();
   }, [
     showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage,
     songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
@@ -459,6 +386,17 @@ export default function AudioVisualizer() {
     spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
     mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
   ]);
+
+  useEffect(() => {
+    instinctParamsRef.current = {
+      enabled: instinctEnabled,
+      mode: instinctMode,
+      speed: instinctSpeed,
+      strength: instinctStrength,
+      frequency: instinctFrequency,
+    };
+    redrawFractalCanvas();
+  }, [instinctEnabled, instinctMode, instinctSpeed, instinctStrength, instinctFrequency]);
 
   // --- IA Asistent ---
   const {
@@ -482,6 +420,7 @@ export default function AudioVisualizer() {
       setSpiralRotationSpeed, setSpiralTightness, setSpiralDotSize, setSpiralColor1,
       setMandalaRotationSpeed, setMandalaLineWidth, setMandalaColor1,
       setShowParticles, setParticleColor, setParticleOpacity,
+      setInstinctMode, setInstinctSpeed, setInstinctStrength, setInstinctFrequency, setInstinctEnabled,
     } as ControlSetters,
   });
 
@@ -545,8 +484,6 @@ export default function AudioVisualizer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [radiusRatio, intensity, strokeWidth, waveColor, bgColor, isPreviewing, waveformReady]);
 
-  const fftLikePointsPerCircle = 2600; // smoothness vs performance
-
   const radiusBaseRatioRef = useRef(radiusRatio);
   useEffect(() => {
     radiusBaseRatioRef.current = radiusRatio;
@@ -584,103 +521,66 @@ export default function AudioVisualizer() {
   };
 
   const ensureCanvasContext = () => {
-    const canvas = canvasRef.current;
+    const canvas = ondaCanvasRef.current;
     if (!canvas) return null;
-    if (!ctxRef.current) ctxRef.current = canvas.getContext("2d");
-    if (ctxRef.current) ctxRef.current.imageSmoothingEnabled = false;
-    const fc = fractalCanvasRef.current;
-    if (fc && !fractalCtxRef.current) fractalCtxRef.current = fc.getContext("2d");
+    if (!ondaCtxRef.current) ondaCtxRef.current = canvas.getContext("2d");
+    if (ondaCtxRef.current) ondaCtxRef.current.imageSmoothingEnabled = false;
+
+    const fc = fondoCanvasRef.current;
+    if (fc && !fondoCtxRef.current) fondoCtxRef.current = fc.getContext("2d");
+    if (fondoCtxRef.current) fondoCtxRef.current.imageSmoothingEnabled = false;
+
+    const fxc = fractalCanvasRef.current;
+    if (fxc && !fractalCtxRef.current) fractalCtxRef.current = fxc.getContext("2d");
     if (fractalCtxRef.current) fractalCtxRef.current.imageSmoothingEnabled = false;
-    return ctxRef.current;
+
+    const ic = instinctCanvasRef.current;
+    if (ic && !instinctCtxRef.current) instinctCtxRef.current = ic.getContext("2d");
+    if (instinctCtxRef.current) instinctCtxRef.current.imageSmoothingEnabled = false;
+
+    const tc = tempCanvasRef.current;
+    if (tc && !tempCtxRef.current) tempCtxRef.current = tc.getContext("2d");
+    if (tempCtxRef.current) tempCtxRef.current.imageSmoothingEnabled = true;
+
+    const lc = letrasCanvasRef.current;
+    if (lc && !letrasCtxRef.current) letrasCtxRef.current = lc.getContext("2d");
+    if (letrasCtxRef.current) letrasCtxRef.current.imageSmoothingEnabled = false;
+
+    return ondaCtxRef.current;
   };
 
   const clearCanvasSolid = () => {
-    const canvas = canvasRef.current;
-    const ctx = ctxRef.current;
-    if (!canvas || !ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    clearCanvas(ondaCanvasRef.current, ondaCtxRef.current);
     hasClearedRef.current = true;
   };
 
-  const fadeCanvas = (alpha: number) => {
-    const canvas = canvasRef.current;
-    const ctx = ctxRef.current;
-    if (!canvas || !ctx) return;
-    ctx.fillStyle = `rgba(0,0,0,${alpha})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  };
-
-  const syncCanvasSize = () => {
-    const canvas = canvasRef.current;
-    const ctx = ctxRef.current;
-    if (!canvas || !ctx) return;
-    if (drawingModeRef.current === "record") return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width * dpr));
-    const h = Math.max(1, Math.floor(rect.height * dpr));
-
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-      clearCanvasSolid();
-    }
-  };
-
-  const syncFractalCanvasSize = (w?: number, h?: number) => {
-    const fc = fractalCanvasRef.current;
-    const fctx = fractalCtxRef.current;
-    if (!fc || !fctx) return;
-    if (drawingModeRef.current === "record") return;
-    if (w === undefined || h === undefined) {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = fc.getBoundingClientRect();
-      w = Math.max(1, Math.floor(rect.width * dpr));
-      h = Math.max(1, Math.floor(rect.height * dpr));
-    }
-    if (fc.width !== w || fc.height !== h) {
-      fc.width = w;
-      fc.height = h;
-    }
+  const syncAllCanvasSizes = () => {
+    syncSizes({
+      onda: ondaCanvasRef.current,
+      fondo: fondoCanvasRef.current,
+      fractal: fractalCanvasRef.current,
+      instinct: instinctCanvasRef.current,
+      letras: letrasCanvasRef.current,
+    }, window.devicePixelRatio || 1, drawingModeRef.current === "record");
   };
 
   const setCanvasVideoSize = () => {
-    const canvas = canvasRef.current;
-    const ctx = ctxRef.current;
-    if (!canvas || !ctx) return;
-    const size = Math.floor(resMap[resolution] || 1080);
-    if (canvas.width !== size || canvas.height !== size) {
-      canvas.width = size;
-      canvas.height = size;
-    }
-    const fc = fractalCanvasRef.current;
-    if (fc && (fc.width !== size || fc.height !== size)) {
-      fc.width = size;
-      fc.height = size;
-    }
+    setVideoSize({
+      onda: ondaCanvasRef.current,
+      fondo: fondoCanvasRef.current,
+      fractal: fractalCanvasRef.current,
+      instinct: instinctCanvasRef.current,
+      letras: letrasCanvasRef.current,
+    }, Math.floor(resMap[resolution] || 1080));
   };
 
   const buildPrecomputedGeometry = () => {
-    const totalSamples = totalSamplesRef.current;
-    if (!totalSamples || totalSamples < 2) return;
-
-    const step = Math.max(1, Math.floor(totalSamples / fftLikePointsPerCircle));
-    sampleStepRef.current = step;
-
-    const pc = Math.max(1, Math.ceil(totalSamples / step));
-    pointCountRef.current = pc;
-
-    const cosArr = new Float32Array(pc);
-    const sinArr = new Float32Array(pc);
-    for (let i = 0; i < pc; i++) {
-      const sampleIdx = i * step;
-      const theta = (sampleIdx / totalSamples) * TWO_PI - Math.PI / 2;
-      cosArr[i] = Math.cos(theta);
-      sinArr[i] = Math.sin(theta);
-    }
-    precomputedCosRef.current = cosArr;
-    precomputedSinRef.current = sinArr;
+    const result = buildGeo(totalSamplesRef.current, fftLikePointsPerCircle);
+    if (!result) return;
+    sampleStepRef.current = result.step;
+    pointCountRef.current = result.pointCount;
+    precomputedCosRef.current = result.cosArr;
+    precomputedSinRef.current = result.sinArr;
   };
 
   const decodeAudioToMono = async (file: File) => {
@@ -747,284 +647,31 @@ export default function AudioVisualizer() {
     hasClearedRef.current = false;
   };
 
-  const getPointXY = (pointIndex: number) => {
-    const ctx = ctxRef.current;
-    const canvas = canvasRef.current;
-    if (!ctx || !canvas) return { x: 0, y: 0 };
-    const { radiusRatio, intensity } = paramsRef.current;
-
-    const monoSamples = monoSamplesRef.current;
-    const cosArr = precomputedCosRef.current;
-    const sinArr = precomputedSinRef.current;
-    const totalSamples = totalSamplesRef.current;
-    if (!monoSamples || !cosArr || !sinArr || !totalSamples) return { x: 0, y: 0 };
-
-    const w = canvas.width;
-    const h = canvas.height;
-    const cx = w / 2;
-    const cy = h / 2;
-    const rMin = Math.min(cx, cy);
-
-    const step = sampleStepRef.current;
-    const sampleIdx = clamp(pointIndex * step, 0, totalSamples - 1);
-    const amp = monoSamples[sampleIdx] ?? 0;
-
-    const radiusBase = rMin * radiusRatio;
-    const radiusAmp = radiusBase * intensity;
-    const r = radiusBase + amp * radiusAmp;
-
-    return {
-      x: cx + r * cosArr[pointIndex],
-      y: cy + r * sinArr[pointIndex],
-    };
-  };
-
-  const drawTip = (progress01: number) => {
-    const ctx = ctxRef.current;
-    const canvas = canvasRef.current;
-    const audioEl = audioRef.current;
-    if (!ctx || !canvas || !audioEl) return;
-
-    const monoSamples = monoSamplesRef.current;
-    const totalSamples = totalSamplesRef.current;
-    const duration = durationRef.current;
-    if (!monoSamples || !totalSamples || !duration) return;
-
-    const { intensity, radiusRatio, waveColor } = paramsRef.current;
-    const img = bgImageRef.current;
-
-    const w = canvas.width;
-    const h = canvas.height;
-    const cx = w / 2;
-    const cy = h / 2;
-    const rMin = Math.min(cx, cy);
-
-    const headAngle = progress01 * TWO_PI - Math.PI / 2;
-    const headSampleIndex = Math.floor(progress01 * (totalSamples - 1));
-    const amp = monoSamples[headSampleIndex] ?? 0;
-
-    const radiusBase = rMin * radiusRatio;
-    const radiusAmp = radiusBase * intensity;
-    const rTip = radiusBase + amp * radiusAmp;
-
-    const x = cx + rTip * Math.cos(headAngle);
-    const y = cy + rTip * Math.sin(headAngle);
-
-    const tipRadius = Math.max(2, Math.min(10, (ctx.lineWidth || 4) * 0.9));
-
-    // Limpiar el cursor anterior solo si partículas está activo
-    if (lastTipRef.current && paramsRef.current.showParticles) {
-      const prev = lastTipRef.current;
-      const r = prev.r + 2;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(prev.x, prev.y, r, 0, TWO_PI);
-      ctx.clip();
-      ctx.clearRect(prev.x - r, prev.y - r, r * 2, r * 2);
-      ctx.restore();
-    }
-
-    ctx.save();
-    ctx.fillStyle = waveColor;
-    ctx.globalAlpha = 0.95;
-    ctx.beginPath();
-    ctx.arc(x, y, tipRadius, 0, TWO_PI);
-    ctx.fill();
-    ctx.restore();
-
-    if (paramsRef.current.showParticles && (drawingModeRef.current === "preview" || drawingModeRef.current === "record")) {
-      emitParticles(x, y, 2);
-    }
-
-    lastTipRef.current = { x, y, r: tipRadius };
-  };
-
-  const drawTitle = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-    const { songTitle, titleColor, titlePreset } = paramsRef.current;
-    if (!songTitle) return;
-    const preset = TITLE_PRESETS.find(p => p.id === titlePreset) || TITLE_PRESETS[0];
-    ctx.save();
-    ctx.fillStyle = titleColor;
-    ctx.font = `${preset.weight} ${Math.floor(canvas.width * preset.size)}px ${preset.font}`;
-    ctx.textAlign = preset.align as CanvasTextAlign;
-    ctx.textBaseline = preset.valign as CanvasTextBaseline;
-    const x = preset.x !== undefined ? canvas.width * preset.x : canvas.width / 2;
-    ctx.fillText(songTitle, x, canvas.height * preset.y);
-    ctx.restore();
-  };
-
-  // --- PARTICLES ---
-  type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number };
-  const particlesRef = useRef<Particle[]>([]);
-
-  const emitParticles = (x: number, y: number, count: number) => {
-    const particles = particlesRef.current;
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * TWO_PI;
-      const speed = 0.5 + Math.random() * 2.5;
-      particles.push({
-        x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1,
-        maxLife: 0.5 + Math.random() * 1.5,
-        size: 1 + Math.random() * 3,
-      });
-    }
-    if (particles.length > 300) particles.splice(0, particles.length - 300);
-  };
-
-  const updateAndDrawParticles = (ctx: CanvasRenderingContext2D) => {
-    const dt = 1 / 60;
-    const particles = particlesRef.current;
-    const opacity = paramsRef.current.particleOpacity ?? 0.7;
-    ctx.save();
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= dt / p.maxLife;
-      if (p.life <= 0) { particles.splice(i, 1); continue; }
-      ctx.globalAlpha = p.life * opacity;
-      ctx.fillStyle = paramsRef.current.particleColor;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * p.life, 0, TWO_PI);
-      ctx.fill();
-    }
-    ctx.restore();
-  };
-
-  // --- ENHANCED DRAW WITH GLOW & GRADIENT ---
-  const drawAdditionalPath = (fromPoint: number, toPoint: number) => {
-    const ctx = ctxRef.current;
-    const canvas = canvasRef.current;
-    const monoSamples = monoSamplesRef.current;
-    const cosArr = precomputedCosRef.current;
-    const sinArr = precomputedSinRef.current;
-    if (!ctx || !canvas || !monoSamples || !cosArr || !sinArr) return;
-    if (toPoint <= fromPoint) return;
-
-    const { strokeWidth, waveColor, glowIntensity, waveGradientMode, gradColor1, gradColor2 } = paramsRef.current;
-
-    // Build point array for this segment
-    const points: Point[] = [];
-    let prev = lastCurvePointRef.current;
-    if (!prev) {
-      prev = getPointXY(fromPoint);
-      lastCurvePointRef.current = prev;
-    }
-    points.push(prev);
-    for (let i = fromPoint + 1; i <= toPoint; i++) {
-      const p = getPointXY(i);
-      const midX = (prev.x + p.x) / 2;
-      const midY = (prev.y + p.y) / 2;
-      points.push({ x: midX, y: midY });
-      points.push(p);
-      prev = p;
-      lastCurvePointRef.current = prev;
-    }
-
-    // Glow pass (behind)
-    if (glowIntensity > 0.01) {
-      ctx.save();
-      ctx.shadowBlur = 25 * glowIntensity;
-      ctx.shadowColor = waveColor;
-      ctx.lineWidth = Math.max(1, (strokeWidth + 2) * glowIntensity);
-      ctx.strokeStyle = waveColor;
-      ctx.globalAlpha = 0.25 * glowIntensity;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // Main stroke
-    ctx.save();
-    ctx.lineWidth = Math.max(0.1, strokeWidth);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    if (waveGradientMode === "gradient") {
-      const grad = ctx.createLinearGradient(
-        canvas.width * 0.2, canvas.height * 0.2,
-        canvas.width * 0.8, canvas.height * 0.8
-      );
-      grad.addColorStop(0, gradColor1);
-      grad.addColorStop(1, gradColor2);
-      ctx.strokeStyle = grad;
-    } else if (waveGradientMode === "rainbow") {
-      const grad = ctx.createConicGradient(0, canvas.width / 2, canvas.height / 2);
-      for (let h = 0; h <= 360; h += 30) {
-        grad.addColorStop(h / 360, `hsl(${h}, 80%, 60%)`);
-      }
-      ctx.strokeStyle = grad;
-    } else {
-      ctx.strokeStyle = waveColor;
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-    ctx.stroke();
-    ctx.restore();
-  };
-
-  // --- STATIC WAVEFORM PREVIEW ---
-  const drawStaticWaveform = () => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    let ctx = previewCtxRef.current;
-    if (!ctx || ctx.canvas !== canvas) {
-      ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      previewCtxRef.current = ctx;
-    }
-    const c = previewCtxRef.current;
-    const monoSamples = monoSamplesRef.current;
-    const cosArr = precomputedCosRef.current;
-    const sinArr = precomputedSinRef.current;
-    if (!monoSamples || !cosArr || !sinArr) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.floor(canvas.clientWidth * dpr);
-    const h = Math.floor(canvas.clientHeight * dpr);
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    c.clearRect(0, 0, w, h);
-    const cx = w / 2, cy = h / 2, rMin = Math.min(cx, cy);
-    const step = sampleStepRef.current;
-    const totalSamples = totalSamplesRef.current;
-    if (!totalSamples) return;
-    const radiusBase = rMin * 0.4;
-    const radiusAmp = radiusBase * 0.3;
-    const pc = pointCountRef.current;
-    c.save();
-    c.strokeStyle = "#6366f1";
-    c.lineWidth = 1.5;
-    c.globalAlpha = 0.6;
-    c.beginPath();
-    for (let i = 0; i < pc; i++) {
-      const sampleIdx = Math.min(i * step, totalSamples - 1);
-      const amp = monoSamples[sampleIdx] ?? 0;
-      const r = radiusBase + amp * radiusAmp;
-      const x = cx + r * cosArr[i];
-      const y = cy + r * sinArr[i];
-      if (i === 0) c.moveTo(x, y);
-      else c.lineTo(x, y);
-    }
-    c.closePath();
-    c.stroke();
-    c.restore();
-  };
+  const particlesRef = useRef<import("../utils/particles").Particle[]>([]);
 
   useEffect(() => {
     if (!waveformReady || !previewCanvasRef.current) return;
 
-    const redraw = () => requestAnimationFrame(() => drawStaticWaveform());
+    const redraw = () => requestAnimationFrame(() => {
+      const c = previewCanvasRef.current;
+      if (!c) return;
+      let pCtx = previewCtxRef.current;
+      if (!pCtx || pCtx.canvas !== c) {
+        pCtx = c.getContext("2d");
+        if (!pCtx) return;
+        previewCtxRef.current = pCtx;
+      }
+      const ms = monoSamplesRef.current;
+      const ca = precomputedCosRef.current;
+      const sa = precomputedSinRef.current;
+      if (!ms || !ca || !sa) return;
+      drawStaticWaveform(c, pCtx, {
+        monoSamples: ms, cosArr: ca, sinArr: sa,
+        totalSamples: totalSamplesRef.current,
+        sampleStep: sampleStepRef.current,
+        pointCount: pointCountRef.current,
+      });
+    });
 
     const observer = new ResizeObserver(redraw);
     observer.observe(previewCanvasRef.current.parentElement ?? previewCanvasRef.current);
@@ -1035,291 +682,99 @@ export default function AudioVisualizer() {
   }, [waveformReady, radiusRatio, intensity, waveColor]);
 
   // --- FRACTAL BACKGROUND ---
-  const GOLDEN_ANGLE = 2.399963229728653;
 
   const getCurrentAmplitude = () => {
-    const monoSamples = monoSamplesRef.current;
-    const audioEl = audioRef.current;
-    const totalSamples = totalSamplesRef.current;
-    const duration = durationRef.current;
-    if (!monoSamples || !audioEl || !totalSamples || !duration) return 0;
-    const progress = clamp((audioEl.currentTime || 0) / duration, 0, 1);
-    const centerIdx = Math.floor(progress * (totalSamples - 1));
-    const halfWin = 256;
-    const start = Math.max(0, centerIdx - halfWin);
-    const end = Math.min(totalSamples - 1, centerIdx + halfWin);
-    let sum = 0;
-    for (let i = start; i <= end; i++) sum += Math.abs(monoSamples[i]);
-    return sum / (end - start + 1);
+    return getAmp(monoSamplesRef.current, audioRef.current, totalSamplesRef.current, durationRef.current);
   };
 
-  const drawRippleFractal = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, amp: number) => {
-    const p = paramsRef.current;
-    const w = canvas.width, h = canvas.height;
-    const cx = w / 2, cy = h / 2;
-    const maxR = Math.min(cx, cy) * 0.95;
-    const now = performance.now() / 1000;
-
-    const count = p.rippleRingCount;
-    const speed = p.rippleSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.5) : 1);
-    const amplitude = p.rippleAmplitude * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
-    const thickness = p.rippleThickness;
-
-    ctx.save();
-    ctx.lineCap = "round";
-
-    for (let i = 0; i < count; i++) {
-      const t = i / Math.max(1, count - 1);
-      const baseR = maxR * (0.05 + t * 0.95);
-      const phase = now * speed * (0.8 + t * 0.4) + i * 1.5;
-      const waveFreq = Math.round(4 + i * 1.8);
-
-      ctx.lineWidth = thickness * (0.5 + t * 0.5);
-      ctx.strokeStyle = hexToRgba(
-        i % 2 === 0 ? p.rippleColor1 : p.rippleColor2,
-        0.25 + t * 0.75
-      );
-
-      const steps = Math.max(48, Math.floor(baseR * 0.12));
-      ctx.beginPath();
-      for (let j = 0; j <= steps; j++) {
-        const theta = (j / steps) * TWO_PI;
-        const r = baseR + Math.sin(theta * waveFreq + phase) * amplitude;
-        const x = cx + r * Math.cos(theta);
-        const y = cy + r * Math.sin(theta);
-        if (j === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.stroke();
-    }
-    ctx.restore();
-  };
-
-  const drawSpiralFractal = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, amp: number) => {
-    const p = paramsRef.current;
-    const w = canvas.width, h = canvas.height;
-    const cx = w / 2, cy = h / 2;
-    const maxR = Math.min(cx, cy) * 0.95;
-
-    const density = p.spiralDensity;
-    const now = performance.now() / 1000;
-
-    const rotationSpeed = p.spiralRotationSpeed * (p.fractalAudioReactive ? (0.7 + amp * 0.15) : 1);
-    const scale = p.spiralTightness * maxR * 0.06 * (0.6 + amp * 0.8);
-    const dotSize = p.spiralDotSize * (p.fractalAudioReactive ? (0.5 + amp * 0.8) : 1);
-    const rotationOffset = now * rotationSpeed;
-
-    ctx.save();
-
-    for (let i = 0; i < density; i++) {
-      const angle = i * GOLDEN_ANGLE + rotationOffset;
-      const r = Math.sqrt(i) * scale;
-      if (r > maxR) break;
-      const x = cx + r * Math.cos(angle);
-      const y = cy + r * Math.sin(angle);
-
-      const t = i / density;
-      ctx.fillStyle = hexToRgba(
-        t < 0.5 ? p.spiralColor1 : p.spiralColor2,
-        0.2 + t * 0.8
-      );
-      const s = Math.max(0.5, dotSize * (0.2 + t * 0.8));
-      ctx.beginPath();
-      ctx.arc(x, y, s, 0, TWO_PI);
-      ctx.fill();
-    }
-    ctx.restore();
-  };
-
-  const drawMandalaFractal = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, amp: number) => {
-    const p = paramsRef.current;
-    const w = canvas.width, h = canvas.height;
-    const cx = w / 2, cy = h / 2;
-    const maxR = Math.min(cx, cy) * 0.9;
-
-    const segments = p.mandalaSegments;
-    const complexity = p.mandalaComplexity;
-    const now = performance.now() / 1000;
-
-    const rotationSpeed = p.mandalaRotationSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.375) : 1);
-    const lineWidth = p.mandalaLineWidth;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(now * rotationSpeed * 0.15);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    const segAngle = TWO_PI / segments;
-
-    for (let s = 0; s < segments; s++) {
-      ctx.save();
-      ctx.rotate(s * segAngle);
-
-      for (let c = 0; c < complexity; c++) {
-        const t = (c + 1) / complexity;
-        const r = maxR * t;
-        const halfArc = (segAngle * 0.4) * (0.5 + Math.sin(now * 0.5 + c * 1.2) * 0.3);
-
-        ctx.lineWidth = lineWidth * (1 - t * 0.5);
-        ctx.strokeStyle = hexToRgba(
-          c % 2 === 0 ? p.mandalaColor1 : p.mandalaColor2,
-          0.2 + t * 0.8
-        );
-
-        ctx.beginPath();
-        ctx.arc(0, 0, r, -halfArc, halfArc);
-        ctx.stroke();
-
-        if (c > 0) {
-          const innerR = r * 0.55;
-          ctx.strokeStyle = hexToRgba(
-            c % 2 === 0 ? p.mandalaColor2 : p.mandalaColor1,
-            0.15 + t * 0.35
-          );
-          ctx.lineWidth = lineWidth * 0.5;
-          ctx.beginPath();
-          ctx.arc(0, 0, innerR, -halfArc * 1.5, halfArc * 1.5);
-          ctx.stroke();
-        }
-      }
-
-      ctx.restore();
-    }
-    ctx.restore();
-  };
-
-  const drawFractalBackground = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-    const p = paramsRef.current;
-    if (!p.fractalEnabled) return;
-
-    const amp = p.fractalAudioReactive ? getCurrentAmplitude() : 0;
-    switch (p.fractalType) {
-      case "ripple": drawRippleFractal(ctx, canvas, amp); break;
-      case "spiral": drawSpiralFractal(ctx, canvas, amp); break;
-      case "mandala": drawMandalaFractal(ctx, canvas, amp); break;
-    }
-  };
-
-  const drawFractalPreview = useCallback(() => {
+  const drawFractalPreviewWrapped = useCallback(() => {
     const canvas = fractalPreviewRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const w = canvas.width, h = canvas.height;
-    const cx = w / 2, cy = h / 2;
-    const maxR = Math.min(cx, cy) * 0.9;
+    const p: FractalParams = {
+      fractalType,
+      bgColor,
+      fractalAudioReactive,
+      rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
+      spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
+      mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+    };
+    drawFractalPrev(ctx, w, h, fractalType, p);
+  }, [fractalType,
+    bgColor,
+    fractalAudioReactive,
+    rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
+    spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
+    mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+  ]);
 
-    ctx.clearRect(0, 0, w, h);
+  useEffect(() => { drawFractalPreviewWrapped(); }, [drawFractalPreviewWrapped]);
 
-    if (fractalType === "ripple") {
-      const count = rippleRingCount;
-      const thick = rippleThickness;
-      for (let i = 0; i < count; i++) {
-        const t = i / Math.max(1, count - 1);
-        const r = maxR * (0.1 + t * 0.9);
-        ctx.lineWidth = Math.max(0.5, thick * (0.5 + t * 0.5) * (w / 200));
-        ctx.strokeStyle = hexToRgba(i % 2 === 0 ? rippleColor1 : rippleColor2, 0.3 + t * 0.7);
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, TWO_PI);
-        ctx.stroke();
-      }
-    } else if (fractalType === "spiral") {
-      const density = spiralDensity;
-      const scale = spiralTightness * maxR * 0.06;
-      const dotSize = spiralDotSize;
-      for (let i = 0; i < density; i++) {
-        const angle = i * GOLDEN_ANGLE;
-        const r = Math.sqrt(i) * scale;
-        if (r > maxR) break;
-        const x = cx + r * Math.cos(angle);
-        const y = cy + r * Math.sin(angle);
-        const t = i / density;
-        ctx.fillStyle = hexToRgba(t < 0.5 ? spiralColor1 : spiralColor2, 0.2 + t * 0.8);
-        const s = Math.max(0.5, dotSize * (0.2 + t * 0.8)) * (w / 200);
-        ctx.beginPath();
-        ctx.arc(x, y, s, 0, TWO_PI);
-        ctx.fill();
-      }
-    } else if (fractalType === "mandala") {
-      const segments = mandalaSegments;
-      const complexity = mandalaComplexity;
-      const lineWidth = mandalaLineWidth;
-      const segAngle = TWO_PI / segments;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      for (let s = 0; s < segments; s++) {
-        ctx.save();
-        ctx.rotate(s * segAngle);
-        for (let c = 0; c < complexity; c++) {
-          const t = (c + 1) / complexity;
-          const r = maxR * t;
-          const halfArc = segAngle * 0.4 * 0.5;
-          ctx.lineWidth = Math.max(0.5, lineWidth * (1 - t * 0.5)) * (w / 200);
-          ctx.strokeStyle = hexToRgba(c % 2 === 0 ? mandalaColor1 : mandalaColor2, 0.2 + t * 0.8);
-          ctx.beginPath();
-          ctx.arc(0, 0, r, -halfArc, halfArc);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-      ctx.restore();
-    }
-  }, [fractalType, rippleRingCount, rippleThickness, rippleColor1, rippleColor2, spiralDensity, spiralTightness, spiralDotSize, spiralColor1, spiralColor2, mandalaSegments, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2]);
+  const drawInstinctPreviewWrapped = useCallback(() => {
+    const canvas = instinctPreviewRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const w = canvas.width, h = canvas.height;
+    const p: InstinctParams = {
+      instinctMode,
+      instinctSpeed,
+      instinctStrength,
+      instinctFrequency,
+      bgColor,
+      fractalAudioReactive: false,
+    };
+    drawInstinctPreview(ctx, w, h, p);
+  }, [
+    bgColor,
+    instinctMode, instinctSpeed, instinctStrength, instinctFrequency,
+  ]);
 
-  useEffect(() => { drawFractalPreview(); }, [drawFractalPreview]);
+  useEffect(() => { drawInstinctPreviewWrapped(); }, [drawInstinctPreviewWrapped]);
 
-  const redrawBackgroundCanvas = () => {
-    const fc = fractalCanvasRef.current;
-    const fctx = fractalCtxRef.current;
+  const redrawFondoCanvas = () => {
+    const fc = fondoCanvasRef.current;
+    const fctx = fondoCtxRef.current;
     if (!fc || !fctx) return;
     if (drawingModeRef.current !== "idle") return;
 
-    syncFractalCanvasSize();
-    fctx.clearRect(0, 0, fc.width, fc.height);
+    syncAllCanvasSizes();
+    drawFondoCanvas(fctx, fc, paramsRef.current.bgColor, bgImageRef.current);
+  };
+
+  const redrawFractalCanvas = () => {
+    const fxc = fractalCanvasRef.current;
+    const fxctx = fractalCtxRef.current;
+    if (!fxc || !fxctx) return;
+
+    syncAllCanvasSizes();
+    fxctx.clearRect(0, 0, fxc.width, fxc.height);
 
     const p = paramsRef.current;
-    const img = bgImageRef.current;
-
-    if (p.fractalEnabled && p.fractalLayerMode === "replace") {
-      drawFractalBackground(fctx, fc);
-    } else {
-      if (img) {
-        const scale = Math.max(fc.width / img.width, fc.height / img.height);
-        const x = (fc.width - img.width * scale) / 2;
-        const y = (fc.height - img.height * scale) / 2;
-        fctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-      } else {
-        fctx.fillStyle = p.bgColor;
-        fctx.fillRect(0, 0, fc.width, fc.height);
-      }
-      if (p.fractalEnabled && p.fractalLayerMode === "overlay") {
-        fctx.save();
-        fctx.globalAlpha = p.fractalOpacity;
-        drawFractalBackground(fctx, fc);
-        fctx.restore();
-      }
+    if (p.fractalEnabled) {
+      fxctx.save();
+      fxctx.globalAlpha = p.fractalOpacity;
+      const amp = p.fractalAudioReactive ? getCurrentAmplitude() : 0;
+      drawFractalBg(fxctx, fxc, p as FractalParams, amp);
+      fxctx.restore();
     }
   };
 
   const tick = () => {
     const audioEl = audioRef.current;
-    const canvas = canvasRef.current;
-    const ctx = ctxRef.current;
+    const canvas = ondaCanvasRef.current;
+    const ctx = ondaCtxRef.current;
     const monoSamples = monoSamplesRef.current;
     if (!audioEl || !canvas || !ctx || !monoSamples) return;
 
-    syncCanvasSize();
-    syncFractalCanvasSize();
+    syncAllCanvasSizes();
 
     const duration = durationRef.current;
     if (!duration) return;
 
     const currentTime = audioEl.currentTime || 0;
-    // Look-ahead adaptativo: 4× el tiempo real entre frames
     const now = performance.now();
     const frameElapsed = lastFrameTimeRef.current !== null
       ? (now - lastFrameTimeRef.current) / 1000
@@ -1338,8 +793,6 @@ export default function AudioVisualizer() {
     const head = clamp(headPointIndex, 0, pointCount - 1);
 
     const p = paramsRef.current;
-    const isFractal = p.fractalEnabled;
-    const layerMode = p.fractalLayerMode;
     const isRecording = drawingModeRef.current === "record";
 
     const ia = iaStateRef.current;
@@ -1347,55 +800,134 @@ export default function AudioVisualizer() {
       ia.update(currentTime, getCurrentAmplitude());
     }
 
-    // --- 1. DRAW FRACTAL CANVAS (background layer, every frame) ---
+    const waveData = {
+      monoSamples,
+      cosArr: precomputedCosRef.current!,
+      sinArr: precomputedSinRef.current!,
+      totalSamples: totalSamplesRef.current,
+      sampleStep: step,
+      pointCount,
+    };
+    const waveStyle: WaveStyle = {
+      radiusRatio: p.radiusRatio,
+      intensity: p.intensity,
+      strokeWidth: p.strokeWidth,
+      waveColor: p.waveColor,
+      glowIntensity: p.glowIntensity,
+      waveGradientMode: p.waveGradientMode,
+      gradColor1: p.gradColor1,
+      gradColor2: p.gradColor2,
+    };
+
+    // --- 1. FONDO CANVAS (z0) — solid color or bg image ---
+    const fondoCanvas = fondoCanvasRef.current;
+    const fondoCtx = fondoCtxRef.current;
+    if (fondoCanvas && fondoCtx) {
+      drawFondoCanvas(fondoCtx, fondoCanvas, p.bgColor, bgImageRef.current);
+    }
+
+    // --- 2. FRACTAL CANVAS (z1) — ripple/spiral/mandala ---
     const fractalCanvas = fractalCanvasRef.current;
     const fractalCtx = fractalCtxRef.current;
     if (fractalCanvas && fractalCtx) {
-      fractalCtx.clearRect(0, 0, fractalCanvas.width, fractalCanvas.height);
-      if (isFractal && layerMode === "replace") {
-        drawFractalBackground(fractalCtx, fractalCanvas);
+      if (p.fractalEnabled) {
+        fractalCtx.clearRect(0, 0, fractalCanvas.width, fractalCanvas.height);
+        fractalCtx.save();
+        fractalCtx.globalAlpha = p.fractalOpacity;
+        drawFractalBg(fractalCtx, fractalCanvas, p as FractalParams, getCurrentAmplitude());
+        fractalCtx.restore();
       } else {
-        const img = bgImageRef.current;
-        if (img) {
-          const scale = Math.max(fractalCanvas.width / img.width, fractalCanvas.height / img.height);
-          const x = (fractalCanvas.width - img.width * scale) / 2;
-          const y = (fractalCanvas.height - img.height * scale) / 2;
-          fractalCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
-        } else {
-          fractalCtx.fillStyle = p.bgColor;
-          fractalCtx.fillRect(0, 0, fractalCanvas.width, fractalCanvas.height);
-        }
-        if (isFractal && layerMode === "overlay") {
-          fractalCtx.save();
-          fractalCtx.globalAlpha = p.fractalOpacity;
-          drawFractalBackground(fractalCtx, fractalCanvas);
-          fractalCtx.restore();
-        }
+        fractalCtx.clearRect(0, 0, fractalCanvas.width, fractalCanvas.height);
       }
     }
 
-    // --- 2. WAVEFORM CANVAS BACKGROUND (transparent + trail or recording composite) ---
+    // --- 2b. INSTINCT CANVAS — instinct modes ---
+    const instinctCanvas = instinctCanvasRef.current;
+    const instinctCtx = instinctCtxRef.current;
+    if (instinctCanvas && instinctCtx) {
+      const ip = instinctParamsRef.current;
+      if (ip.enabled) {
+        const tempCanvas = tempCanvasRef.current;
+        const tempCtx = tempCtxRef.current;
+        if (tempCanvas && tempCtx) {
+          const tw = instinctCanvas.width, th = instinctCanvas.height;
+          if (tempCanvas.width !== tw || tempCanvas.height !== th) {
+            tempCanvas.width = tw;
+            tempCanvas.height = th;
+          }
+          tempCtx.clearRect(0, 0, tw, th);
+          const fondoCanvasLocal = fondoCanvasRef.current;
+          if (fondoCanvasLocal) tempCtx.drawImage(fondoCanvasLocal, 0, 0);
+          const instIdx = layerOrder.indexOf("instinct");
+          for (let i = 0; i < instIdx; i++) {
+            const layer = layerOrder[i];
+            if (layer === "fractal" && p.fractalEnabled) {
+              const fc = fractalCanvasRef.current;
+              if (fc) tempCtx.drawImage(fc, 0, 0);
+            }
+          }
+        }
+        instinctCtx.clearRect(0, 0, instinctCanvas.width, instinctCanvas.height);
+        drawInstinctFractal(instinctCtx, instinctCanvas, {
+          instinctMode: ip.mode,
+          instinctSpeed: ip.speed,
+          instinctStrength: ip.strength,
+          instinctFrequency: ip.frequency,
+          bgColor: p.bgColor,
+          fractalAudioReactive: p.fractalAudioReactive,
+        }, getCurrentAmplitude(), tempCanvasRef.current);
+      } else {
+        instinctCtx.clearRect(0, 0, instinctCanvas.width, instinctCanvas.height);
+      }
+    }
+
+    // --- 3. WAVEFORM CANVAS (z2) — onda + tip + particles ---
     const shouldFade = audioEl.loop || (!isRecording && isLoopingUI);
 
     if (!hasClearedRef.current) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (isRecording && fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+      if (isRecording) {
+        if (fondoCanvas) ctx.drawImage(fondoCanvas, 0, 0);
+        for (const layer of layerOrder) {
+          if (layer === "fractal" && p.fractalEnabled) {
+            if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+          } else if (layer === "instinct" && instinctParamsRef.current.enabled) {
+            if (instinctCanvas) ctx.drawImage(instinctCanvas, 0, 0);
+          }
+        }
+      }
       resetDrawingState();
       hasClearedRef.current = true;
       lastDrawnPointIndexRef.current = 0;
-      lastCurvePointRef.current = getPointXY(0);
+      lastCurvePointRef.current = getPointXY(0, canvas, p, waveData);
     } else if (shouldFade) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+      if (isRecording) {
+        if (fondoCanvas) ctx.drawImage(fondoCanvas, 0, 0);
+        for (const layer of layerOrder) {
+          if (layer === "fractal" && p.fractalEnabled) {
+            if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+          } else if (layer === "instinct" && instinctParamsRef.current.enabled) {
+            if (instinctCanvas) ctx.drawImage(instinctCanvas, 0, 0);
+          }
+        }
+      }
       resetDrawingState();
       lastDrawnPointIndexRef.current = 0;
-      lastCurvePointRef.current = getPointXY(0);
+      lastCurvePointRef.current = getPointXY(0, canvas, p, waveData);
     } else if (isRecording) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+      if (fondoCanvas) ctx.drawImage(fondoCanvas, 0, 0);
+      for (const layer of layerOrder) {
+        if (layer === "fractal" && p.fractalEnabled) {
+          if (fractalCanvas) ctx.drawImage(fractalCanvas, 0, 0);
+        } else if (layer === "instinct" && instinctParamsRef.current.enabled) {
+          if (instinctCanvas) ctx.drawImage(instinctCanvas, 0, 0);
+        }
+      }
       resetDrawingState();
       lastDrawnPointIndexRef.current = 0;
-      lastCurvePointRef.current = getPointXY(0);
+      lastCurvePointRef.current = getPointXY(0, canvas, p, waveData);
     }
 
     if (head < lastDrawnPointIndexRef.current && shouldFade) {
@@ -1407,16 +939,36 @@ export default function AudioVisualizer() {
       const last = lastDrawnPointIndexRef.current;
       if (last < 0) {
         lastDrawnPointIndexRef.current = 0;
-        lastCurvePointRef.current = getPointXY(0);
-        if (head > 0) drawAdditionalPath(0, head);
+        lastCurvePointRef.current = getPointXY(0, canvas, p, waveData);
+        if (head > 0) {
+          lastCurvePointRef.current = drawAdditionalPath(ctx, canvas, 0, head, lastCurvePointRef.current, waveStyle, waveData);
+        }
       } else if (head > last) {
-        drawAdditionalPath(last, head);
+        lastCurvePointRef.current = drawAdditionalPath(ctx, canvas, last, head, lastCurvePointRef.current, waveStyle, waveData);
         lastDrawnPointIndexRef.current = head;
       }
-      drawTip(progress01);
+      lastTipRef.current = drawTip(ctx, canvas, progress01,
+        { intensity: p.intensity, radiusRatio: p.radiusRatio, waveColor: p.waveColor },
+        { monoSamples, totalSamples: totalSamplesRef.current, duration: durationRef.current },
+        lastTipRef.current, p.showParticles);
+      if (p.showParticles && (drawingModeRef.current === "preview" || drawingModeRef.current === "record") && lastTipRef.current) {
+        emitParticles(particlesRef.current, lastTipRef.current.x, lastTipRef.current.y, 2);
+      }
     }
-    drawTitle(ctx, canvas);
-    if (paramsRef.current.showParticles) updateAndDrawParticles(ctx);
+
+    // --- 4. LETRAS CANVAS (z3) — Title ---
+    const letrasCanvas = letrasCanvasRef.current;
+    const letrasCtx = letrasCtxRef.current;
+    if (letrasCanvas && letrasCtx) {
+      if (isRecording) {
+        drawTitle(ctx, canvas, p.songTitle, p.titleColor, p.titlePreset);
+      } else {
+        letrasCtx.clearRect(0, 0, letrasCanvas.width, letrasCanvas.height);
+        drawTitle(letrasCtx, letrasCanvas, p.songTitle, p.titleColor, p.titlePreset);
+      }
+    }
+
+    if (paramsRef.current.showParticles) updateAndDrawParticles(ctx, particlesRef.current, p.particleColor, p.particleOpacity);
 
     if (!audioEl.loop && progress01 >= 1) {
       isAnimatingRef.current = false;
@@ -1424,7 +976,6 @@ export default function AudioVisualizer() {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-
       if (drawingModeRef.current !== "record") {
         setIsPreviewing(false);
       }
@@ -1493,23 +1044,33 @@ export default function AudioVisualizer() {
       // Clear canvases inmediatamente para evitar destello de la onda anterior
       ensureCanvasContext();
       clearCanvasSolid();
-      const fc = fractalCanvasRef.current;
-      const fctx = fractalCtxRef.current;
+      const fc = fondoCanvasRef.current;
+      const fctx = fondoCtxRef.current;
       if (fc && fctx) {
         fctx.fillStyle = paramsRef.current.bgColor;
         fctx.fillRect(0, 0, fc.width, fc.height);
+      }
+      const fxc = fractalCanvasRef.current;
+      const fxctx = fractalCtxRef.current;
+      if (fxc && fxctx) {
+        fxctx.clearRect(0, 0, fxc.width, fxc.height);
+      }
+      const lc = letrasCanvasRef.current;
+      const lctx = letrasCtxRef.current;
+      if (lc && lctx) {
+        lctx.clearRect(0, 0, lc.width, lc.height);
       }
 
       // Forzar flush visual: asegura que el canvas limpio se pinte antes de continuar
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => {
-          ctxRef.current?.getImageData(0, 0, 1, 1);
+          ondaCtxRef.current?.getImageData(0, 0, 1, 1);
           resolve();
         });
       });
 
       await prepareAndPlay({ loop: isLoopingUI });
-      syncFractalCanvasSize();
+      syncAllCanvasSizes();
       resetDrawingState();
       setIsPreviewing(true);
       startAnimation("preview");
@@ -1555,9 +1116,9 @@ export default function AudioVisualizer() {
     }
 
     try {
-      const canvas = canvasRef.current;
+      const canvas = ondaCanvasRef.current;
       const audioEl = audioRef.current;
-      const ctx = ctxRef.current;
+      const ctx = ondaCtxRef.current;
       if (!canvas || !audioEl || !ctx) {
         throw new Error("Canvas o audio no disponible.");
       }
@@ -1727,11 +1288,11 @@ export default function AudioVisualizer() {
     }
   };
 
-  const drawBgToFractalCanvas = () => {
-    const fc = fractalCanvasRef.current;
-    const fctx = fractalCtxRef.current;
+  const drawBgToFondoCanvas = () => {
+    const fc = fondoCanvasRef.current;
+    const fctx = fondoCtxRef.current;
     if (!fc || !fctx) return;
-    syncFractalCanvasSize();
+    syncAllCanvasSizes();
     fctx.clearRect(0, 0, fc.width, fc.height);
     const img = bgImageRef.current;
     if (img) {
@@ -1750,7 +1311,7 @@ export default function AudioVisualizer() {
       setBgImage(null);
       bgImageRef.current = null;
       setBgImagePreset("custom");
-      drawBgToFractalCanvas();
+      drawBgToFondoCanvas();
       setTimeout(() => clearCanvasSolid(), 50);
       return;
     }
@@ -1763,7 +1324,7 @@ export default function AudioVisualizer() {
       img.onload = () => {
         setBgImage(img);
         bgImageRef.current = img;
-        drawBgToFractalCanvas();
+        drawBgToFondoCanvas();
         clearCanvasSolid();
       };
       img.src = event.target?.result as string;
@@ -1776,7 +1337,7 @@ export default function AudioVisualizer() {
     if (presetId === "custom") {
       setBgImage(null);
       bgImageRef.current = null;
-      drawBgToFractalCanvas();
+      drawBgToFondoCanvas();
       return;
     }
     setBgMode("image");
@@ -1786,7 +1347,7 @@ export default function AudioVisualizer() {
     img.onload = () => {
       setBgImage(img);
       bgImageRef.current = img;
-      drawBgToFractalCanvas();
+      drawBgToFondoCanvas();
       clearCanvasSolid();
     };
     img.src = preset.src;
@@ -1821,7 +1382,7 @@ export default function AudioVisualizer() {
       img.onload = () => {
         setBgImage(img);
         bgImageRef.current = img;
-        drawBgToFractalCanvas();
+        drawBgToFondoCanvas();
         clearCanvasSolid();
       };
       img.src = canvas.toDataURL();
@@ -1831,7 +1392,7 @@ export default function AudioVisualizer() {
       setBgImage(img);
       bgImageRef.current = img;
       setBgImagePreset("1");
-      drawBgToFractalCanvas();
+      drawBgToFondoCanvas();
       clearCanvasSolid();
     };
     img.onerror = loadFallback;
@@ -1847,10 +1408,12 @@ export default function AudioVisualizer() {
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
       spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
       mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+      instinctMode, instinctSpeed, instinctStrength, instinctFrequency, instinctEnabled,
       showWave, waveColor, waveGradientMode, gradColor1, gradColor2,
       glowIntensity, showParticles, particleColor, particleOpacity,
       radiusRatio, intensity, strokeWidth,
       songTitle, titleColor, titlePreset,
+      layerOrder,
     };
     localStorage.setItem(`quickPreset_${key}`, JSON.stringify(data));
     showToast(`Preset "${key}" guardado`);
@@ -1865,10 +1428,11 @@ export default function AudioVisualizer() {
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
     spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
     mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+    instinctMode, instinctSpeed, instinctStrength, instinctFrequency, instinctEnabled,
     showWave, waveColor, waveGradientMode, gradColor1, gradColor2,
     glowIntensity, showParticles, particleColor, particleOpacity,
     radiusRatio, intensity, strokeWidth,
-    songTitle, titleColor, titlePreset, showToast]);
+    songTitle, titleColor, titlePreset, layerOrder, showToast]);
 
   const loadSavedPreset = useCallback((key: string) => {
     const raw = localStorage.getItem(`quickPreset_${key}`);
@@ -1915,6 +1479,12 @@ export default function AudioVisualizer() {
       setMandalaLineWidth(saved.mandalaLineWidth);
       setMandalaColor1(saved.mandalaColor1);
       setMandalaColor2(saved.mandalaColor2);
+      if (saved.instinctMode !== undefined) setInstinctMode(saved.instinctMode);
+      if (saved.instinctSpeed !== undefined) setInstinctSpeed(saved.instinctSpeed);
+      if (saved.instinctStrength !== undefined) setInstinctStrength(saved.instinctStrength);
+      if (saved.instinctFrequency !== undefined) setInstinctFrequency(saved.instinctFrequency);
+      if (saved.instinctEnabled !== undefined) setInstinctEnabled(saved.instinctEnabled);
+      if (saved.layerOrder !== undefined) setLayerOrder(saved.layerOrder);
       setWaveColor(saved.waveColor);
       setWaveGradientMode(saved.waveGradientMode);
       setGradColor1(saved.gradColor1);
@@ -2078,541 +1648,179 @@ export default function AudioVisualizer() {
               setIsLoopingUI={setIsLoopingUI}
               audioUrl={audioUrl}
               audioRef={audioRef}
-              onCollapseAll={() => setCollapsedSections(new Set(["audio", "presets", "wave", "bg", "fractal", "particles", "text", "export"]))}
+              onCollapseAll={() => setCollapsedSections(new Set(["audio", "presets", "wave", "bg", "fractal", "instinct", "particles", "text", "export"]))}
               onResetDefaults={resetDefaults}
             />
           <div className="space-y-2 pr-1 overflow-y-auto max-h-[calc(100vh-16rem)]">
-            <CollapsibleSection
-              title="Audio"
+            <AudioSection
               collapsed={collapsedSections.has("audio")}
               onToggle={() => toggleSection("audio")}
-              icon={<div aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.6)]" />}
-              sectionBg="bg-indigo-950/30"
-            >
-              <div className="flex flex-col gap-1">
-                <FileDropZone onDrop={(file) => onPickFile(file)}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={isMobile ? "audio/*" : ".mp3,.wav,.ogg,.m4a,.flac,.aac,.wma,.aiff,.opus"}
-                    aria-label="Seleccionar archivo de audio"
-                    disabled={isDecoding || isRecording || isPreviewing}
-                    className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-xs text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-500/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-indigo-200 hover:file:bg-indigo-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                    onClick={(e) => { e.currentTarget.value = "" }}
-                    onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-                  />
-                </FileDropZone>
+              fileInputRef={fileInputRef}
+              isMobile={isMobile}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+              isPreviewing={isPreviewing}
+              onPickFile={onPickFile}
+              fileMeta={fileMeta}
+            />
 
-                {fileMeta ? (
-                  <div className="text-xs text-slate-400">{fileMeta}</div>
-                ) : (
-                  <div className="text-xs text-slate-400">Selecciona un archivo de audio</div>
-                )}
-
-                <p className="mt-1 text-xs text-amber-400/80">
-                  Revisa permisos si no encuentras tu audio
-                </p>
-                
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Presets"
+            <PresetsSection
               collapsed={collapsedSections.has("presets")}
               onToggle={() => toggleSection("presets")}
-              icon={<div aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]" />}
-              sectionBg="bg-amber-950/30"
-            >
-              {(() => {
-                const presets = [
-                  { label: "Croma", key: "croma" },
-                  { label: "Imagen", key: "image" },
-                  { label: "Fractal 1", key: "fractal1" },
-                  { label: "Fractal 2", key: "fractal2" },
-                  { label: "Fractal 3", key: "fractal3" },
-                ];
-                return (
-                  <div className="flex flex-col gap-1.5">
-                    <div className="grid grid-cols-5 gap-1">
-                      {presets.map((p) => (
-                        <button key={p.key} type="button" onClick={() => applyQuickPreset(p.key)}
-                          aria-label={`Preset ${p.label}`}
-                          className={`rounded-lg px-1 py-0.5 text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
-                            activePreset === p.key
-                              ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
-                              : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-indigo-500/50 hover:text-indigo-300"
-                          }`}
-                        >
-                          {p.label}{presetSavedKeys.has(p.key) ? "*" : ""}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <button type="button" onClick={resetDefaults}
-                        aria-label="Restablecer valores predeterminados"
-                        className="w-full rounded-lg border border-slate-700/50 bg-slate-800/40 px-2 py-1 text-[11px] font-medium text-slate-400 transition-all duration-200 hover:border-slate-600/50 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                      >
-                        ← Resetear valores
-                      </button>
-                      <button type="button" onClick={saveCurrentToActivePreset}
-                        disabled={!activePreset}
-                        aria-label="Guardar preset activo"
-                        className="w-full rounded-lg px-1 py-0.5 text-[11px] font-medium bg-slate-800/60 text-amber-400 border border-slate-700/50 hover:border-amber-500/50 hover:text-amber-300 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                      >
-                        Guardar preset
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
-            </CollapsibleSection>
+              applyQuickPreset={applyQuickPreset}
+              activePreset={activePreset}
+              presetSavedKeys={presetSavedKeys}
+              resetDefaults={resetDefaults}
+              saveCurrentToActivePreset={saveCurrentToActivePreset}
+            />
 
-            <CollapsibleSection
-              title="Onda"
+            <WaveSection
               collapsed={collapsedSections.has("wave")}
               onToggle={() => toggleSection("wave")}
-              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.6)]" />}
-              sectionBg="bg-cyan-950/30"
-            >
-              <label className="flex items-center gap-2 pb-1.5 cursor-pointer">
-                <input type="checkbox" checked={showWave} onChange={(e) => setShowWave(e.target.checked)} disabled={isDecoding || isRecording} className="accent-cyan-500 w-3.5 h-3.5 rounded border-slate-700 bg-slate-900" />
-                <span className="text-xs font-medium text-slate-300 tracking-wide select-none">Mostrar onda</span>
-              </label>
-              <div className="text-[11px] font-semibold tracking-wider text-cyan-400/50 uppercase pb-0.5">Forma</div>
-              <label className="block">
-                <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                  <span>Radio</span>
-                  <span className="tabular-nums text-slate-300">{radiusRatio.toFixed(2)}</span>
-                </div>
-                <input type="range" min={0.25} max={0.6} step={0.01} value={radiusRatio} onChange={(e) => setRadiusRatio(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-              </label>
+              showWave={showWave}
+              setShowWave={setShowWave}
+              radiusRatio={radiusRatio}
+              setRadiusRatio={setRadiusRatio}
+              intensity={intensity}
+              setIntensity={setIntensity}
+              strokeWidth={strokeWidth}
+              setStrokeWidth={setStrokeWidth}
+              glowIntensity={glowIntensity}
+              setGlowIntensity={setGlowIntensity}
+              waveColor={waveColor}
+              setWaveColor={setWaveColor}
+              waveGradientMode={waveGradientMode}
+              setWaveGradientMode={setWaveGradientMode}
+              gradColor1={gradColor1}
+              setGradColor1={setGradColor1}
+              gradColor2={gradColor2}
+              setGradColor2={setGradColor2}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+              moveLayer={moveLayer}
+              layerOrder={layerOrder}
+            />
 
-              <label className="block pt-1">
-                <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                  <span>Intensidad</span>
-                  <span className="tabular-nums text-slate-300">{intensity.toFixed(2)}</span>
-                </div>
-                <input type="range" min={0} max={0.8} step={0.01} value={intensity} onChange={(e) => setIntensity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-              </label>
-
-              <label className="block pt-1">
-                <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                  <span>Grosor</span>
-                  <span className="tabular-nums text-slate-300">{strokeWidth.toFixed(1)}</span>
-                </div>
-                <input type="range" min={0.2} max={10} step={0.1} value={strokeWidth} onChange={(e) => setStrokeWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-              </label>
-
-              <label className="block pt-1">
-                <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                  <span>Brillo</span>
-                  <span className="tabular-nums text-slate-300">{glowIntensity.toFixed(2)}</span>
-                </div>
-                <input type="range" min={0} max={1} step={0.05} value={glowIntensity} onChange={(e) => setGlowIntensity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-              </label>
-
-              <div className="border-t border-slate-800/60 pt-1.5 mt-1.5">
-                <div className="text-[11px] font-semibold tracking-wider text-cyan-400/50 uppercase pb-0.5">Color</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Onda</div>
-                    <div className="flex items-center gap-1.5">
-                      <input type="color" value={waveColor} onChange={(e) => setWaveColor(e.target.value)} disabled={isDecoding || isRecording} aria-label="Color de onda" className="mt-0.5 h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[11px] font-mono text-slate-500">{waveColor}</span>
-                    </div>
-                  </label>
-                  <div>
-                    <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Gradiente</div>
-                    <select value={waveGradientMode} onChange={(e) => setWaveGradientMode(e.target.value as any)} disabled={isDecoding || isRecording} aria-label="Modo de gradiente" className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950">
-                      <option value="solid">Sólido</option>
-                      <option value="gradient">Gradiente</option>
-                      <option value="rainbow">Arcoíris</option>
-                    </select>
-                  </div>
-                </div>
-
-                {waveGradientMode === "gradient" && (
-                  <div className="grid grid-cols-2 gap-1.5 pt-1">
-                    <label className="block">
-                      <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
-                      <div className="flex items-center gap-1">
-                        <input type="color" value={gradColor1} onChange={(e) => setGradColor1(e.target.value)} aria-label="Color de gradiente 1" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                        <span className="text-[10px] font-mono text-slate-500">{gradColor1}</span>
-                      </div>
-                    </label>
-                    <label className="block">
-                      <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
-                      <div className="flex items-center gap-1">
-                        <input type="color" value={gradColor2} onChange={(e) => setGradColor2(e.target.value)} aria-label="Color de gradiente 2" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                        <span className="text-[10px] font-mono text-slate-500">{gradColor2}</span>
-                      </div>
-                    </label>
-                  </div>
-                )}
-              </div>
-
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Fondo"
+            <BgSection
               collapsed={collapsedSections.has("bg")}
               onToggle={() => toggleSection("bg")}
-              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.6)]" />}
-              sectionBg="bg-violet-950/30"
-            >
-              {/* Mode selector: Color | Imagen */}
-              <div className="grid grid-cols-2 gap-1 pb-1.5">
-                {(["color", "image"] as const).map((mode) => (
-                  <button key={mode} type="button" onClick={() => handleBgModeChange(mode)}
-                    disabled={isDecoding || isRecording}
-                    aria-label={`Modo fondo: ${mode === "color" ? "Color" : "Imagen"}`}
-                    className={`rounded-lg px-1.5 py-1 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
-                      bgMode === mode
-                        ? "bg-violet-500/20 text-violet-300 border border-violet-500/40"
-                        : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
-                    }`}
-                  >
-                    {mode === "color" ? "Color" : "Imagen"}
-                  </button>
-                ))}
-              </div>
+              bgMode={bgMode}
+              handleBgModeChange={handleBgModeChange}
+              activeBgPreset={activeBgPreset}
+              applyBgPreset={applyBgPreset}
+              bgColor={bgColor}
+              setBgColor={setBgColor}
+              setActiveBgPreset={setActiveBgPreset}
+              bgImagePreset={bgImagePreset}
+              handleBgImagePresetChange={handleBgImagePresetChange}
+              bgImage={bgImage}
+              onPickBgImage={onPickBgImage}
+              BG_IMAGE_PRESETS={BG_IMAGE_PRESETS}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+              isPreviewing={isPreviewing}
+            />
 
-              {/* COLOR sub-menu */}
-              <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
-                bgMode === "color" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
-              }`}>
-                <div className="pt-0.5 space-y-1">
-                  <div className="flex flex-wrap gap-1">
-                    {bgPresets.map((p) => (
-                      <button key={p.id} type="button" onClick={() => applyBgPreset(p.id)} disabled={isDecoding || isRecording}
-                        aria-label={`Fondo preset: ${p.label}`}
-                        className={`rounded-lg px-2 py-0.5 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
-                          activeBgPreset === p.id
-                            ? "bg-violet-500/20 text-violet-300 border border-violet-500/40"
-                            : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Personalizado</div>
-                    <div className="flex items-center gap-1.5">
-                      <input type="color" value={bgColor} onChange={(e) => { setBgColor(e.target.value); setActiveBgPreset(null); }}
-                        disabled={isDecoding || isRecording} aria-label="Color de fondo personalizado" className="h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[11px] font-mono text-slate-500">{bgColor}</span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* IMAGE sub-menu */}
-              <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
-                bgMode === "image" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
-              }`}>
-                <div className="pt-0.5 space-y-1">
-                  <select value={bgImagePreset} onChange={(e) => handleBgImagePresetChange(e.target.value)}
-                    aria-label="Imagen de fondo predefinida"
-                    disabled={isDecoding || isRecording}
-                    className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                  >
-                    <option value="custom">Ninguna</option>
-                    {BG_IMAGE_PRESETS.map((p) => (
-                      <option key={p.id} value={p.id}>{p.label}</option>
-                    ))}
-                  </select>
-                  <FileDropZone onDrop={(file) => onPickBgImage(file)}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      aria-label="Seleccionar imagen de fondo"
-                      disabled={isDecoding || isRecording || isPreviewing}
-                      className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-xs text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-cyan-200 hover:file:bg-cyan-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                      onChange={(e) => onPickBgImage(e.target.files?.[0] ?? null)}
-                    />
-                  </FileDropZone>
-                  {bgImage && (
-                    <button
-                      type="button"
-                      onClick={() => onPickBgImage(null)}
-                      aria-label="Remover imagen de fondo"
-                      className="self-start rounded-lg px-1.5 py-0.5 text-xs text-rose-400 transition-all duration-200 hover:bg-rose-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                    >
-                      Remover
-                    </button>
-                  )}
-                </div>
-              </div>
-
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Fractal"
+            <FractalSection
               collapsed={collapsedSections.has("fractal")}
               onToggle={() => toggleSection("fractal")}
-              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(192,38,211,0.6)]" />}
-              sectionBg="bg-fuchsia-950/30"
-            >
-              <div className="space-y-1">
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-                    <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)}
-                      disabled={isDecoding || isRecording} aria-label="Activar fractal"
-                      className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                    />
-                    Activar fractal
-                  </label>
+              fractalEnabled={fractalEnabled}
+              setFractalEnabled={setFractalEnabled}
+              fractalType={fractalType}
+              setFractalType={setFractalType}
+              fractalLayerMode={fractalLayerMode}
+              fractalOpacity={fractalOpacity}
+              setFractalOpacity={setFractalOpacity}
+              fractalAudioReactive={fractalAudioReactive}
+              setFractalAudioReactive={setFractalAudioReactive}
+              rippleRingCount={rippleRingCount}
+              setRippleRingCount={setRippleRingCount}
+              rippleSpeed={rippleSpeed}
+              setRippleSpeed={setRippleSpeed}
+              rippleAmplitude={rippleAmplitude}
+              setRippleAmplitude={setRippleAmplitude}
+              rippleThickness={rippleThickness}
+              setRippleThickness={setRippleThickness}
+              rippleColor1={rippleColor1}
+              setRippleColor1={setRippleColor1}
+              rippleColor2={rippleColor2}
+              setRippleColor2={setRippleColor2}
+              spiralDensity={spiralDensity}
+              setSpiralDensity={setSpiralDensity}
+              spiralRotationSpeed={spiralRotationSpeed}
+              setSpiralRotationSpeed={setSpiralRotationSpeed}
+              spiralTightness={spiralTightness}
+              setSpiralTightness={setSpiralTightness}
+              spiralDotSize={spiralDotSize}
+              setSpiralDotSize={setSpiralDotSize}
+              spiralColor1={spiralColor1}
+              setSpiralColor1={setSpiralColor1}
+              spiralColor2={spiralColor2}
+              setSpiralColor2={setSpiralColor2}
+              mandalaSegments={mandalaSegments}
+              setMandalaSegments={setMandalaSegments}
+              mandalaRotationSpeed={mandalaRotationSpeed}
+              setMandalaRotationSpeed={setMandalaRotationSpeed}
+              mandalaComplexity={mandalaComplexity}
+              setMandalaComplexity={setMandalaComplexity}
+              mandalaLineWidth={mandalaLineWidth}
+              setMandalaLineWidth={setMandalaLineWidth}
+              mandalaColor1={mandalaColor1}
+              setMandalaColor1={setMandalaColor1}
+              mandalaColor2={mandalaColor2}
+              setMandalaColor2={setMandalaColor2}
+              fractalPreviewRef={fractalPreviewRef}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+              moveLayer={moveLayer}
+              layerOrder={layerOrder}
+            />
 
-                  {fractalEnabled && (
-                    <>
-                  <select value={fractalType} onChange={(e) => setFractalType(e.target.value as any)}
-                    disabled={isDecoding || isRecording}
-                    aria-label="Tipo de fractal"
-                    className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-fuchsia-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                  >
-                    <option value="ripple">Ondas (Ripple)</option>
-                    <option value="spiral">Espiral (Phyllotaxis)</option>
-                    <option value="mandala">Mandala</option>
-                  </select>
+            <InstinctSection
+              collapsed={collapsedSections.has("instinct")}
+              onToggle={() => toggleSection("instinct")}
+              instinctEnabled={instinctEnabled}
+              setInstinctEnabled={setInstinctEnabled}
+              instinctMode={instinctMode}
+              setInstinctMode={setInstinctMode}
+              instinctSpeed={instinctSpeed}
+              setInstinctSpeed={setInstinctSpeed}
+              instinctStrength={instinctStrength}
+              setInstinctStrength={setInstinctStrength}
+              instinctFrequency={instinctFrequency}
+              setInstinctFrequency={setInstinctFrequency}
+              instinctPreviewRef={instinctPreviewRef}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+              moveLayer={moveLayer}
+              layerOrder={layerOrder}
+            />
 
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-                    <input type="checkbox" checked={fractalAudioReactive} onChange={(e) => setFractalAudioReactive(e.target.checked)}
-                      disabled={isDecoding || isRecording} aria-label="Fractal reactivo al audio"
-                      className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                    />
-                    Reactivo al audio
-                  </label>
-
-                  {fractalLayerMode === "overlay" && (
-                    <label className="block">
-                      <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                        <span>Opacidad</span>
-                        <span className="tabular-nums text-slate-300">{fractalOpacity.toFixed(2)}</span>
-                      </div>
-                      <input type="range" min={0.1} max={1} step={0.05} value={fractalOpacity} onChange={(e) => setFractalOpacity(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                    </label>
-                  )}
-
-                  <div className="flex justify-center pt-0.5 pb-1">
-                    <canvas ref={fractalPreviewRef} width={80} height={80}
-                      className="w-[80px] h-[80px] rounded-lg border border-slate-700/50 bg-slate-950/80"
-                      aria-label="Vista previa del fractal" />
-                  </div>
-
-                  {/* RIPPLE CONTROLS */}
-                  {fractalType === "ripple" && (
-                    <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
-                      <div className="text-[11px] font-semibold tracking-wider text-fuchsia-400/60 uppercase">Ondas</div>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Anillos</span>
-                          <span className="tabular-nums text-slate-300">{rippleRingCount}</span>
-                        </div>
-                        <input type="range" min={3} max={20} step={1} value={rippleRingCount} onChange={(e) => setRippleRingCount(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Velocidad</span>
-                          <span className="tabular-nums text-slate-300">{rippleSpeed.toFixed(1)}</span>
-                        </div>
-                        <input type="range" min={0.1} max={3} step={0.1} value={rippleSpeed} onChange={(e) => setRippleSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Amplitud</span>
-                          <span className="tabular-nums text-slate-300">{rippleAmplitude}</span>
-                        </div>
-                        <input type="range" min={2} max={60} step={1} value={rippleAmplitude} onChange={(e) => setRippleAmplitude(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Grosor</span>
-                          <span className="tabular-nums text-slate-300">{rippleThickness.toFixed(1)}</span>
-                        </div>
-                        <input type="range" min={0.5} max={18} step={0.5} value={rippleThickness} onChange={(e) => setRippleThickness(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <label className="block">
-                          <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
-                          <div className="flex items-center gap-1">
-                            <input type="color" value={rippleColor1} onChange={(e) => setRippleColor1(e.target.value)} aria-label="Color de ripple 1" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                            <span className="text-[10px] font-mono text-slate-500">{rippleColor1}</span>
-                          </div>
-                        </label>
-                        <label className="block">
-                          <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
-                          <div className="flex items-center gap-1">
-                            <input type="color" value={rippleColor2} onChange={(e) => setRippleColor2(e.target.value)} aria-label="Color de ripple 2" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                            <span className="text-[10px] font-mono text-slate-500">{rippleColor2}</span>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SPIRAL CONTROLS */}
-                  {fractalType === "spiral" && (
-                    <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
-                      <div className="text-[11px] font-semibold tracking-wider text-fuchsia-400/60 uppercase">Espiral</div>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Densidad</span>
-                          <span className="tabular-nums text-slate-300">{spiralDensity}</span>
-                        </div>
-                        <input type="range" min={50} max={500} step={10} value={spiralDensity} onChange={(e) => setSpiralDensity(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Rotación</span>
-                          <span className="tabular-nums text-slate-300">{spiralRotationSpeed.toFixed(1)}</span>
-                        </div>
-                        <input type="range" min={0} max={1} step={0.05} value={spiralRotationSpeed} onChange={(e) => setSpiralRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Apertura</span>
-                          <span className="tabular-nums text-slate-300">{spiralTightness.toFixed(2)}</span>
-                        </div>
-                        <input type="range" min={0.1} max={1.5} step={0.05} value={spiralTightness} onChange={(e) => setSpiralTightness(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Tamaño punto</span>
-                          <span className="tabular-nums text-slate-300">{spiralDotSize.toFixed(1)}</span>
-                        </div>
-                        <input type="range" min={3} max={12} step={0.5} value={spiralDotSize} onChange={(e) => setSpiralDotSize(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <label className="block">
-                          <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
-                          <div className="flex items-center gap-1">
-                            <input type="color" value={spiralColor1} onChange={(e) => setSpiralColor1(e.target.value)} aria-label="Color de espiral 1" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                            <span className="text-[10px] font-mono text-slate-500">{spiralColor1}</span>
-                          </div>
-                        </label>
-                        <label className="block">
-                          <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
-                          <div className="flex items-center gap-1">
-                            <input type="color" value={spiralColor2} onChange={(e) => setSpiralColor2(e.target.value)} aria-label="Color de espiral 2" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                            <span className="text-[10px] font-mono text-slate-500">{spiralColor2}</span>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* MANDALA CONTROLS */}
-                  {fractalType === "mandala" && (
-                    <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
-                      <div className="text-[11px] font-semibold tracking-wider text-fuchsia-400/60 uppercase">Mandala</div>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Segmentos</span>
-                          <span className="tabular-nums text-slate-300">{mandalaSegments}</span>
-                        </div>
-                        <input type="range" min={3} max={24} step={1} value={mandalaSegments} onChange={(e) => setMandalaSegments(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Rotación</span>
-                          <span className="tabular-nums text-slate-300">{mandalaRotationSpeed.toFixed(1)}</span>
-                        </div>
-                        <input type="range" min={0} max={1} step={0.1} value={mandalaRotationSpeed} onChange={(e) => setMandalaRotationSpeed(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Complejidad</span>
-                          <span className="tabular-nums text-slate-300">{mandalaComplexity}</span>
-                        </div>
-                        <input type="range" min={1} max={6} step={1} value={mandalaComplexity} onChange={(e) => setMandalaComplexity(parseInt(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <label className="block">
-                        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                          <span>Grosor línea</span>
-                          <span className="tabular-nums text-slate-300">{mandalaLineWidth.toFixed(1)}</span>
-                        </div>
-                        <input type="range" min={0.5} max={20} step={1} value={mandalaLineWidth} onChange={(e) => setMandalaLineWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <label className="block">
-                          <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
-                          <div className="flex items-center gap-1">
-                            <input type="color" value={mandalaColor1} onChange={(e) => setMandalaColor1(e.target.value)} aria-label="Color de mandala 1" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                            <span className="text-[10px] font-mono text-slate-500">{mandalaColor1}</span>
-                          </div>
-                        </label>
-                        <label className="block">
-                          <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
-                          <div className="flex items-center gap-1">
-                            <input type="color" value={mandalaColor2} onChange={(e) => setMandalaColor2(e.target.value)} aria-label="Color de mandala 2" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                            <span className="text-[10px] font-mono text-slate-500">{mandalaColor2}</span>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                    </>
-                  )}
-                </div>
-            </CollapsibleSection>
-
-                        <CollapsibleSection
-              title="Partículas"
+            <ParticlesSection
               collapsed={collapsedSections.has("particles")}
               onToggle={() => toggleSection("particles")}
-              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.6)]" />}
-              sectionBg="bg-sky-950/30"
-            >
-              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-                <input type="checkbox" checked={showParticles} onChange={(e) => setShowParticles(e.target.checked)} disabled={isDecoding || isRecording} aria-label="Mostrar partículas" className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                Activar partículas
-              </label>
-              {showParticles && (
-                <>
-                  <label className="block pt-1">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color</div>
-                    <div className="flex items-center gap-1.5">
-                      <input type="color" value={particleColor} onChange={(e) => setParticleColor(e.target.value)} aria-label="Color de partículas" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[11px] font-mono text-slate-500">{particleColor}</span>
-                    </div>
-                  </label>
-                  <label className="block pt-1">
-                    <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-                      <span>Opacidad</span>
-                      <span className="tabular-nums text-slate-300">{particleOpacity.toFixed(2)}</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={particleOpacity} onChange={(e) => setParticleOpacity(parseFloat(e.target.value))} className="mt-0.5 w-full" />
-                  </label>
-                </>
-              )}
-            </CollapsibleSection>
+              showParticles={showParticles}
+              setShowParticles={setShowParticles}
+              particleColor={particleColor}
+              setParticleColor={setParticleColor}
+              particleOpacity={particleOpacity}
+              setParticleOpacity={setParticleOpacity}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+            />
 
-                        <CollapsibleSection
-              title="Texto"
+            <TextSection
               collapsed={collapsedSections.has("text")}
               onToggle={() => toggleSection("text")}
-              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]" />}
-              sectionBg="bg-rose-950/30"
-            >
-              <div className="flex flex-col gap-1">
-                <input type="text" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} placeholder="Mi canción..."
-                  aria-label="Título de la canción"
-                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                />
-                <select value={titlePreset} onChange={(e) => setTitlePreset(e.target.value)}
-                  aria-label="Estilo de título"
-                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-                >
-                  {TITLE_PRESETS.map((p) => (
-                    <option key={p.id} value={p.id}>{p.label}</option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-1.5">
-                  <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} aria-label="Color de título" className="h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                  <span className="text-[11px] font-mono text-slate-500">{titleColor}</span>
-                </div>
-              </div>
-            </CollapsibleSection>
+              songTitle={songTitle}
+              setSongTitle={setSongTitle}
+              titlePreset={titlePreset}
+              setTitlePreset={setTitlePreset}
+              titleColor={titleColor}
+              setTitleColor={setTitleColor}
+              moveLayer={moveLayer}
+              layerOrder={layerOrder}
+            />
 
             {error ? (
               <div role="alert" className="rounded-lg border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-2 text-xs text-rose-200 shadow-lg shadow-rose-900/10">
@@ -2625,61 +1833,19 @@ export default function AudioVisualizer() {
               </div>
             ) : null}
 
-            <div ref={exportSectionRef}>
-            <CollapsibleSection
-              title="Exportar"
+            <ExportSection
               collapsed={collapsedSections.has("export")}
               onToggle={() => toggleSection("export")}
-              icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />}
-              sectionBg="bg-emerald-950/30"
-            >
-
-              <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5 mt-1">Resolución</div>
-              <div className="grid grid-cols-3 gap-1">
-                {(["720p", "1080p", "4K"] as const).map((r) => (
-                  <button key={r} type="button" onClick={() => setResolution(r)} disabled={isExporting || isRecording}
-                    aria-label={`Resolución ${r}`}
-                    className={`rounded-lg px-1.5 py-1 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
-                      resolution === r
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                        : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-
-              <button type="button" onClick={() => void handleGenerateAndDownloadRealtime()}
-                disabled={isDecoding || isRecording || isExporting || !audioUrl || !waveformReady}
-                aria-label="Grabar y descargar video"
-                className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <svg className="h-4 w-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="8" />
-                  </svg>
-                  Grabar y descargar
-                </span>
-              </button>
-
-              <div className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-2 py-1 mt-1.5 text-xs leading-relaxed text-amber-300/70">
-                Mantén la pestaña en primer plano.
-              </div>
-
-              {isExporting ? (
-                <div className="pt-1">
-                  <div className="flex items-center gap-1.5 text-xs text-indigo-300">
-                    <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Exportando...
-                  </div>
-                </div>
-              ) : null}
-            </CollapsibleSection>
-            </div>
+              exportSectionRef={exportSectionRef}
+              resolution={resolution}
+              setResolution={setResolution}
+              isExporting={isExporting}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+              audioUrl={audioUrl}
+              waveformReady={waveformReady}
+              handleGenerateAndDownloadRealtime={handleGenerateAndDownloadRealtime}
+            />
             {/* Conversion progress overlay */}
             <ConversionProgress
               progress={convProgress}
@@ -2713,12 +1879,22 @@ export default function AudioVisualizer() {
 
           <div className="rounded-xl border border-slate-700/50 bg-slate-950/60 p-2 shadow-[0_0_30px_rgba(99,102,241,0.1)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(99,102,241,0.18)]">
             <div className="relative w-full aspect-square">
-              <canvas ref={fractalCanvasRef}
+              <canvas ref={fondoCanvasRef}
                 className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
                 style={{ zIndex: 0 }} />
-              <canvas ref={canvasRef}
-                className="relative w-full h-full rounded-lg"
+              <canvas ref={fractalCanvasRef}
+                className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
                 style={{ zIndex: 1 }} />
+              <canvas ref={instinctCanvasRef}
+                className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
+                style={{ zIndex: 1 }} />
+              <canvas ref={ondaCanvasRef}
+                className="absolute inset-0 w-full h-full rounded-lg"
+                style={{ zIndex: 2 }} />
+              <canvas ref={letrasCanvasRef}
+                className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
+                style={{ zIndex: 3 }} />
+              <canvas ref={tempCanvasRef} className="hidden" />
             </div>
             <audio ref={audioRef} className="hidden" />
           </div>

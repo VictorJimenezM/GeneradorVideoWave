@@ -31,14 +31,34 @@ src/
 ├── recordrtc.d.ts            # Type declaration for RecordRTC (any)
 ├── vite-env.d.ts             # Vite client types
 ├── components/
-│   ├── AudioVisualizerG.tsx  # ~2758 lines — main component
+│   ├── AudioVisualizerG.tsx  # ~1894 lines — main component (refactored, sections extracted)
+│   ├── CollapsibleSection.tsx # Reusable collapsible wrapper (extracted from AudioVisualizerG)
 │   ├── ConversionProgress.tsx # Cyberpunk terminal overlay during WebM→MP4 conversion
-│   └── IAAsistentPanel.tsx   # IA Assistant checkbox + mode selector + BPM/beat status + playback controls
+│   ├── FileDropZone.tsx      # Drag-and-drop wrapper (extracted from AudioVisualizerG)
+│   ├── IAAsistentPanel.tsx   # IA Assistant checkbox + mode selector + BPM/beat status + playback controls
+│   └── sidebar/
+│       ├── AudioSection.tsx
+│       ├── PresetsSection.tsx
+│       ├── WaveSection.tsx
+│       ├── BgSection.tsx
+│       ├── FractalSection.tsx
+│       ├── InstinctSection.tsx
+│       ├── ParticlesSection.tsx
+│       ├── TextSection.tsx
+│       └── ExportSection.tsx
 ├── hooks/
 │   ├── useAudioAnalyser.ts   # Micrófono hook (getUserMedia → AnalyserNode, NOT integrated)
 │   └── useIAAsistent.ts      # IA Assistant hook: BPM detection, beat scheduling, parameter changes
 └── utils/
-    └── convertWebmToMp4.ts   # FFmpeg.wasm init + WebM→MP4 conversion (ultrafast preset)
+    ├── audio.ts              # ~30 lines — buildPrecomputedGeometry, getCurrentAmplitude (extracted)
+    ├── canvas.ts             # ~28 lines — clearCanvasSolid, syncAllCanvasSizes, setCanvasVideoSize (extracted)
+    ├── convertWebmToMp4.ts   # FFmpeg.wasm init + WebM→MP4 conversion (ultrafast preset)
+    ├── fondo.ts              # ~34 lines — BgMode, bgPresets, drawFondoCanvas
+    ├── fractals.ts           # ~330 lines — FractalType, FractalParams, ripple/spiral/mandala draw + preview
+    ├── instinct.ts           # ~277 lines — InstinctMode, InstinctParams, 4 instinct modes + drawInstinctPreview
+    ├── particles.ts          # ~38 lines — Particle, emitParticles, updateAndDrawParticles
+    ├── title.ts              # ~55 lines — TITLE_PRESETS, drawTitle
+    └── wave.ts               # ~127 lines — Point, fftLikePointsPerCircle, drawAdditionalPath, drawTip, drawStaticWaveform
 
 public/
 ├── fondo_muestra_1.png
@@ -50,30 +70,42 @@ public/
 Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
 ```
 
-## Internal components (in AudioVisualizerG.tsx)
-
-| Component | Props | Purpose |
-|-----------|-------|---------|
-| `CollapsibleSection` | title, icon, collapsed, onToggle, children, sectionBg? | Accessible collapsible with `aria-expanded`/`aria-controls`, smooth max-h transition |
-| `FileDropZone` | onDrop, children | Drag-and-drop wrapper with visual overlay feedback |
-
 ## Utilities & constants
 
-| Symbol | Value/Purpose |
-|--------|---------------|
-| `TWO_PI` | `2π` |
-| `GOLDEN_ANGLE` | `2.39996…` (phyllotaxis spiral, defined inside component) |
-| `formatBytes(n)` | B/KB/MB/GB formatting |
-| `clamp(n, min, max)` | Number clamping |
-| `hexToRgba(hex, alpha)` | Hex → `rgba(r,g,b,a)` |
+| Symbol | Source | Value/Purpose |
+|--------|--------|---------------|
+| `TWO_PI` | fractals.ts | `2π` |
+| `GOLDEN_ANGLE` | fractals.ts | `2.39996…` (phyllotaxis spiral) |
+| `fftLikePointsPerCircle` | wave.ts | `2600` (sample step divisor) |
+| `TITLE_PRESETS` | title.ts | 10 title style presets |
+| `bgPresets` | fondo.ts | 5 background color presets |
+| `formatBytes(n)` | AudioVisualizerG.tsx | B/KB/MB/GB formatting |
+| `clamp(n, min, max)` | fractals.ts | Number clamping |
+| `hexToRgba(hex, alpha)` | fractals.ts | Hex → `rgba(r,g,b,a)` |
 
 ## Types
 
 ```typescript
-type Point = { x: number; y: number };
-type Particle = { x, y, vx, vy, life, maxLife, size };
+// fractals.ts
 type FractalType = "ripple" | "spiral" | "mandala";
+interface FractalParams { fractalType, fractalAudioReactive, ripple*, spiral*, mandala*, bgColor }
+
+// instinct.ts
+type InstinctMode = "water" | "organic" | "fragments" | "ifs";
+interface InstinctParams { instinctMode, instinctSpeed, instinctStrength, instinctFrequency, bgColor, fractalAudioReactive }
+
+// wave.ts
+type Point = { x: number; y: number };
+type WaveStyle = { radiusRatio, intensity, strokeWidth, waveColor, glowIntensity, waveGradientMode, gradColor1, gradColor2 };
+type WaveData = { monoSamples, cosArr, sinArr, totalSamples, sampleStep, pointCount };
+
+// particles.ts
+type Particle = { x, y, vx, vy, life, maxLife, size };
+
+// fondo.ts
 type BgMode = "color" | "image" | "fractal";
+
+// AudioVisualizerG.tsx
 type WaveGradientMode = "solid" | "gradient" | "rainbow";
 ```
 
@@ -104,9 +136,10 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 | 3 | **Onda** (collapsible) | **Mostrar onda** checkbox, **Forma** (radio, intensidad, grosor, brillo), **Color** (color picker + gradiente select side by side, conditional Color 1/2) |
 | 4 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove) |
 | 5 | **Fractal** (collapsible) | Activar checkbox, tipo (ripple/spiral/mandala), reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
-| 6 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
-| 7 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
-| 8 | **Exportar** (collapsible) | Resolución 720p/1080p/4K, botón **Grabar y descargar** (icono rojo), advertencia foreground |
+| 6 | **Instinto Inconsciente** (collapsible) | Activar checkbox, modo (water/organic/fragments/ifs), velocidad, intensidad, frecuencia, preview (80×80) + botones ▲/▼ reordenar capa |
+| 7 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
+| 8 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
+| 9 | **Exportar** (collapsible) | Resolución 720p/1080p/4K, botón **Grabar y descargar** (icono rojo), advertencia foreground |
 
 ## Preset system
 
@@ -133,45 +166,50 @@ Reset defaults: single `resetDefaults()` button restores all 30+ state variables
 - `fractalAudioReactive` = `true`
 - `particleColor` = `"#a78bfa"`
 - `particleOpacity` = `0.7`
-- `collapsedSections` starts with `"presets"`, `"wave"`, `"bg"`, `"fractal"`, `"particles"`, `"text"`, `"export"` (todo colapsado excepto Audio)
+- `collapsedSections` starts with `"presets"`, `"wave"`, `"bg"`, `"fractal"`, `"instinct"`, `"particles"`, `"text"`, `"export"` (todo colapsado excepto Audio)
 - Volume = 0.7, Loop = true
 - `radiusRatio` = `0.60`, `intensity` = `0.80`, `strokeWidth` = `1.0`, `glowIntensity` = `0.40`
 - `waveColor` = `"#ffffff"`, `waveGradientMode` = `"solid"`, `gradColor1` = `"#6366f1"`, `gradColor2` = `"#a855f7"`
 - `songTitle` = `""`, `titleColor` = `"#ffffff"`, `titlePreset` = `"bottom-center"`
 - `resolution` = `"1080p"`, `loop` = `true`, `isLoopingUI` = `true`
 
-## Dual-canvas rendering pipeline
+## 5-canvas rendering pipeline
 
-Two stacked `<canvas>` inside `relative w-full aspect-square`:
+Five stacked `<canvas>` inside `relative w-full aspect-square`. CSS z-index handles compositing in preview mode; `ondaCanvas` composites all layers via `drawImage` during recording for `captureStream(30)`. Layers are **reorderable** (fondo is always z-0).
 
-| Canvas | Ref | Z-index | Role |
-|--------|-----|---------|------|
-| **Fractal/Background** | `fractalCanvasRef` | 0 | Solid color, cover-fit bg image, or fractal animation |
-| **Waveform** | `canvasRef` | 1 | Circular waveform, tip, particles, title. Transparent bg. |
+| Canvas | Ref | z-index | Role | Preview | Recording |
+|--------|-----|---------|------|---------|-----------|
+| **Fondo** | `fondoCanvasRef` | 0 | Solid color or cover-fit bg image | CSS stacking | Composited into ondaCanvas |
+| **Fractal** | `fractalCanvasRef` | 1 | Ripple/spiral/mandala (independent transforms) | CSS stacking | Composited into ondaCanvas |
+| **Instinct** | `instinctCanvasRef` | 1 | Instinct modes (captures layers below) | CSS stacking | Composited into ondaCanvas |
+| **Onda** | `ondaCanvasRef` | 2 | Circular waveform, tip, particles. Transparent bg. | Transparent (others show through) | Master canvas — composites all layers, draws waveform |
+| **Letras** | `letrasCanvasRef` | 3 | Title text (independent animation) | CSS stacking on top | Skipped (title drawn directly on ondaCanvas) |
 
 ### Drawing order (every frame in `tick()`)
 
-1. **Fractal canvas** — full redraw:
-   - If fractal enabled + replace → fractal only
-   - Else → solid `bgColor` or cover-fit `bgImage`
-   - If fractal enabled + overlay → fractal on top with `globalAlpha = fractalOpacity`
+1. **Fondo canvas** — `drawFondoCanvas(fctx, fc, bgColor, bgImage)` (solid color or cover-fit bg image)
 
-2. **Waveform canvas background**:
-   - First frame: `clearRect()` (transparent)
-   - Loop/trail active: `source-atop` black overlay `rgba(0,0,0,0.02)` — only darkens waveform pixels
-   - Recording: `clearRect()` + `drawImage(fractalCanvas)`, then full redraw from 0→head
+2. **Fractal canvas** — `clearRect()` + `drawFractalBackground()` with `globalAlpha = fractalOpacity` (if enabled)
 
-3. **Waveform drawing** (`drawAdditionalPath`):
+3. **Instinct canvas** — pre-renders by accumulating layers below it in `layerOrder` into `tempCanvas`, then applies `drawInstinctFractal()` distortion
+
+4. **Onda canvas background**:
+   - **Preview**: `clearRect()` (transparent — layers show through via CSS)
+   - **Recording**: `clearRect()` + `drawImage` of each layer in `layerOrder` (fondo→fractal→instinct→onda→letras)
+
+5. **Waveform drawing** (`drawAdditionalPath`):
    - Mid-point interpolation between samples for smoother curves
    - Glow pass: `shadowBlur = 25 * glowIntensity` behind main stroke
    - Main stroke: 3 modes — **solid** (waveColor), **gradient** (linear 2-stop), **rainbow** (conic HSL 0-360°)
    - Draws incrementally from `lastDrawnPointIndex → head`
 
-4. **Tip** (`drawTip`): circle at head position, radius `max(2, min(10, lineWidth * 0.9))`
+6. **Tip** (`drawTip`): circle at head position, radius `max(2, min(10, lineWidth * 0.9))`
 
-5. **Title** (`drawTitle`): rendered per preset config (font, size, align, position)
+7. **Particles** (`updateAndDrawParticles`): update physics, draw fading circles (on onda canvas)
 
-6. **Particles** (`updateAndDrawParticles`): update physics, draw fading circles
+8. **Title** (`drawTitle`):
+   - **Preview**: drawn on `letrasCanvas` (z-index 3, independent layer)
+   - **Recording**: drawn directly on `ondaCanvas` so `captureStream()` includes it
 
 ### Tip clearing
 - Only clears previous tip when `showParticles` is active
@@ -247,8 +285,8 @@ Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de l
 | Cada X beats | Cambios | Prob (agresivo) | Prob (sensible) |
 |-------------|---------|:---:|:---:|
 | 4 | waveColor, waveGradientMode, gradColor1/2, showParticles, particleColor | 85% | 45% |
-| 8 | fractalEnabled, fractalType, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2 | 100% | 70% |
-| 16 | spiralRotationSpeed, spiralTightness, spiralDotSize, mandalaRotationSpeed, mandalaLineWidth, fractalOpacity, spiralColor1, mandalaColor1 | 100% | 90% |
+| 8 | fractalEnabled, fractalType, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2, instinctEnabled, instinctMode | 100% | 70% |
+| 16 | spiralRotationSpeed, spiralTightness, spiralDotSize, mandalaRotationSpeed, mandalaLineWidth, fractalOpacity, spiralColor1, mandalaColor1, instinctSpeed, instinctStrength, instinctFrequency | 100% | 90% |
 
 ### Integración en AudioVisualizerG.tsx
 
@@ -266,9 +304,8 @@ Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de l
 
 | Mode | Strategy |
 |------|----------|
-| **Preview** | `syncCanvasSize()` — DPR-aware, responsive to container `getBoundingClientRect()` |
-| **Recording** | `setCanvasVideoSize()` — fixed square: 720 / 1080 / 2160 px |
-| **Fractal** | `syncFractalCanvasSize()` — mirrors waveform canvas size |
+| **Preview** | `syncAllCanvasSizes()` — DPR-aware, resizes all 5 canvases based on container `getBoundingClientRect()` |
+| **Recording** | `setCanvasVideoSize()` — fixed square: 720 / 1080 / 2160 px, all 5 canvases
 
 ## Video recording (.webm → MP4 via FFmpeg.wasm)
 
@@ -307,7 +344,11 @@ FFmpeg.wasm is loaded on mount from CDN (`@ffmpeg/ffmpeg@0.11.6` + `@ffmpeg/core
 | `handlePreview()` | Start animation loop in `"preview"` mode |
 | `handleGenerateAndDownloadRealtime()` | Start recording in `"record"` mode |
 | `downloadBlob(blob, extension, customName?)` | Download blob with filename derived from input file or fallback `audio-visualizer-{Date}` |
-| `redrawBackgroundCanvas()` | Redraw fractal canvas when params change (idle only) |
+| `redrawFondoCanvas()` | Redraw background canvas (solid color or image) when params change (idle only) |
+| `redrawFractalCanvas()` | Redraw fractal canvas when params change (idle only) |
+| `drawFondoCanvas(ctx, canvas, bgColor, bgImage)` | fondo.ts — solid color or cover-fit bg image |
+| `drawInstinctFractal(ctx, canvas, params, amp, bgCanvas)` | instinct.ts — dispatcher to 4 instinct modes |
+| `drawInstinctPreview(ctx, w, h, params)` | instinct.ts — 80×80 instinct preview |
 | `loadSampleBgImage()` | Load first bg image preset (with procedural fallback) |
 
 ## `useAudioAnalyser` hook (not integrated)
@@ -327,7 +368,7 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
   - **MINOR**: nuevas funcionalidades, secciones o integraciones
   - **PATCH**: bugfixes, ajustes UI, refactors menores
 
-## Pending tasks
+## Refactoring history
 
-- [x] **Conversión blob webm → mp4**: convertir el blob generado por RecordRTC (.webm VP9) a MP4 (H.264/AAC) para descarga, usando FFmpeg.wasm (ultrafast preset). La descarga es `.mp4` con el mismo nombre del archivo de entrada.
+- **v1.1.1** — Extracción de componentes visuales: CollapsibleSection, FileDropZone, 9 secciones del sidebar, y utilidades canvas/audio de AudioVisualizerG.tsx (~2562 → ~1894 líneas).
 

@@ -121,7 +121,7 @@ export default function IAAsistentPanel({
 
       {waveformReady && (
         <div>
-          <canvas ref={previewCanvasRef} className="w-full h-14 rounded-lg border border-slate-800/60 bg-slate-950/40" />
+          <canvas ref={previewCanvasRef as any} className="w-full h-14 rounded-lg border border-slate-800/60 bg-slate-950/40" />
         </div>
       )}
 

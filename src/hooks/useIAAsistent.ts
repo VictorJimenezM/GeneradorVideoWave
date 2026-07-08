@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { InstinctMode } from "../utils/instinct";
 
 export type IAIAssistantMode = "aggressive" | "sensitive";
 
@@ -32,6 +33,11 @@ export interface ControlSetters {
   setShowParticles: (v: boolean) => void;
   setParticleColor: (v: string) => void;
   setParticleOpacity: (v: number) => void;
+  setInstinctMode: (v: InstinctMode) => void;
+  setInstinctSpeed: (v: number) => void;
+  setInstinctStrength: (v: number) => void;
+  setInstinctFrequency: (v: number) => void;
+  setInstinctEnabled: (v: boolean) => void;
 }
 
 export interface IAConfig {
@@ -150,6 +156,10 @@ function applyBeatChanges(
     s.setRippleAmplitude(rnd(10, 50));
     s.setRippleThickness(rnd(3.0, 6.0));
     s.setRippleColor1(pick(WAVE_COLORS));
+    s.setInstinctEnabled(true);
+    s.setInstinctMode(pick(["water", "organic", "fragments", "ifs"]) as InstinctMode);
+    s.setInstinctSpeed(rnd(0.3, 3.0));
+    s.setInstinctStrength(rnd(10, 60));
   }
 
   if (beatIndex > 0 && beatIndex % 16 === 0 && Math.random() < per16) {
@@ -162,6 +172,9 @@ function applyBeatChanges(
     if (Math.random() < 0.4) {
       s.setSpiralColor1(pick(WAVE_COLORS));
       s.setMandalaColor1(pick(WAVE_COLORS));
+    }
+    if (Math.random() < 0.5) {
+      s.setInstinctFrequency(rnd(0.005, 0.08));
     }
   }
 }
