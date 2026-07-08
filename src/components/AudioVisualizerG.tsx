@@ -178,6 +178,7 @@ export default function AudioVisualizer() {
   const lastCurvePointRef = useRef<Point | null>(null);
   const lastTipRef = useRef<{ x: number; y: number; r: number } | null>(null);
   const hasClearedRef = useRef(false);
+  const lastFrameTimeRef = useRef<number | null>(null);
 
   // Recording
   const recorderRef = useRef<any | null>(null);
@@ -207,12 +208,12 @@ export default function AudioVisualizer() {
   // Reset all visual parameters to defaults
   const resetDefaults = useCallback(() => {
     setShowWave(true);
-    setRadiusRatio(0.60);
-    setIntensity(0.80);
-    setStrokeWidth(1.0);
+    setRadiusRatio(0.50);
+    setIntensity(0.17);
+    setStrokeWidth(0.3);
     setWaveColor("#ffffff");
     setBgColor("#000000");
-    setGlowIntensity(0.4);
+    setGlowIntensity(0.40);
     setShowParticles(false);
     setParticleColor("#a78bfa");
     setParticleOpacity(0.7);
@@ -325,7 +326,7 @@ export default function AudioVisualizer() {
   const bitrateMap: Record<string, number> = { "720p": 8_000_000, "1080p": 20_000_000, "4K": 50_000_000 };
 
   // --- VISUAL EFFECTS ---
-  const [glowIntensity, setGlowIntensity] = useState(0.4);
+  const [glowIntensity, setGlowIntensity] = useState(0.40);
   const [showParticles, setShowParticles] = useState(false);
   const [particleColor, setParticleColor] = useState("#a78bfa");
   const [particleOpacity, setParticleOpacity] = useState(0.7);
@@ -391,9 +392,9 @@ export default function AudioVisualizer() {
 
   // Live parameters (state + refs for drawing loop).
   const [showWave, setShowWave] = useState(true);
-  const [radiusRatio, setRadiusRatio] = useState(0.60); // radio base = min(cx,cy) * ratio
-  const [intensity, setIntensity] = useState(0.80); // amp radius = radiusBase * intensity
-  const [strokeWidth, setStrokeWidth] = useState(1.0);
+  const [radiusRatio, setRadiusRatio] = useState(0.50); // radio base = min(cx,cy) * ratio
+  const [intensity, setIntensity] = useState(0.17); // amp radius = radiusBase * intensity
+  const [strokeWidth, setStrokeWidth] = useState(0.3);
   const [waveColor, setWaveColor] = useState("#ffffff");
   const [bgColor, setBgColor] = useState("#000000");
 
@@ -718,7 +719,8 @@ export default function AudioVisualizer() {
       } else {
         for (let c = 0; c < channels; c++) {
           const ch = audioBuffer.getChannelData(c);
-          for (let i = 0; i < length; i++) mono[i] += ch[i] / channels;
+          // for (let i = 0; i < length; i++) mono[i] += ch[i] / channels; // mezcla mono promedio (atenuaba picos paneados)
+          for (let i = 0; i < length; i++) mono[i] += ch[i]; // suma directa L+R
         }
       }
 
@@ -941,7 +943,7 @@ export default function AudioVisualizer() {
 
     // Main stroke
     ctx.save();
-    ctx.lineWidth = Math.max(1, strokeWidth);
+    ctx.lineWidth = Math.max(0.1, strokeWidth);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -974,10 +976,11 @@ export default function AudioVisualizer() {
   const drawStaticWaveform = () => {
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
-    const ctx = previewCtxRef.current;
-    if (!ctx) {
-      previewCtxRef.current = canvas.getContext("2d");
-      if (!previewCtxRef.current) return;
+    let ctx = previewCtxRef.current;
+    if (!ctx || ctx.canvas !== canvas) {
+      ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      previewCtxRef.current = ctx;
     }
     const c = previewCtxRef.current;
     const monoSamples = monoSamplesRef.current;
@@ -1019,9 +1022,16 @@ export default function AudioVisualizer() {
   };
 
   useEffect(() => {
-    if (waveformReady && previewCanvasRef.current) {
-      drawStaticWaveform();
-    }
+    if (!waveformReady || !previewCanvasRef.current) return;
+
+    const redraw = () => requestAnimationFrame(() => drawStaticWaveform());
+
+    const observer = new ResizeObserver(redraw);
+    observer.observe(previewCanvasRef.current.parentElement ?? previewCanvasRef.current);
+
+    redraw();
+
+    return () => observer.disconnect();
   }, [waveformReady, radiusRatio, intensity, waveColor]);
 
   // --- FRACTAL BACKGROUND ---
@@ -1309,7 +1319,15 @@ export default function AudioVisualizer() {
     if (!duration) return;
 
     const currentTime = audioEl.currentTime || 0;
-    const progress01 = clamp(currentTime / duration, 0, 1);
+    // Look-ahead adaptativo: 4× el tiempo real entre frames
+    const now = performance.now();
+    const frameElapsed = lastFrameTimeRef.current !== null
+      ? (now - lastFrameTimeRef.current) / 1000
+      : 0.016;
+    lastFrameTimeRef.current = now;
+    const LOOK_AHEAD = frameElapsed * 4;
+    const adjustedTime = Math.min(currentTime + LOOK_AHEAD, duration);
+    const progress01 = clamp(adjustedTime / duration, 0, 1);
 
     const pointCount = pointCountRef.current;
     if (!pointCount) return;
@@ -1419,6 +1437,7 @@ export default function AudioVisualizer() {
   const startAnimation = (mode: "preview" | "record") => {
     if (!monoSamplesRef.current) return;
     drawingModeRef.current = mode;
+    lastFrameTimeRef.current = performance.now();
     isAnimatingRef.current = true;
     hasClearedRef.current = false;
     lastDrawnPointIndexRef.current = -1;
@@ -1470,9 +1489,26 @@ export default function AudioVisualizer() {
       await stopAll();
       const audioEl = audioRef.current;
       if (!audioEl) return;
-      await prepareAndPlay({ loop: isLoopingUI });
+
+      // Clear canvases inmediatamente para evitar destello de la onda anterior
       ensureCanvasContext();
       clearCanvasSolid();
+      const fc = fractalCanvasRef.current;
+      const fctx = fractalCtxRef.current;
+      if (fc && fctx) {
+        fctx.fillStyle = paramsRef.current.bgColor;
+        fctx.fillRect(0, 0, fc.width, fc.height);
+      }
+
+      // Forzar flush visual: asegura que el canvas limpio se pinte antes de continuar
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          ctxRef.current?.getImageData(0, 0, 1, 1);
+          resolve();
+        });
+      });
+
+      await prepareAndPlay({ loop: isLoopingUI });
       syncFractalCanvasSize();
       resetDrawingState();
       setIsPreviewing(true);
@@ -2164,7 +2200,7 @@ export default function AudioVisualizer() {
                   <span>Grosor</span>
                   <span className="tabular-nums text-slate-300">{strokeWidth.toFixed(1)}</span>
                 </div>
-                <input type="range" min={1} max={10} step={0.5} value={strokeWidth} onChange={(e) => setStrokeWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
+                <input type="range" min={0.2} max={10} step={0.1} value={strokeWidth} onChange={(e) => setStrokeWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
               </label>
 
               <label className="block pt-1">

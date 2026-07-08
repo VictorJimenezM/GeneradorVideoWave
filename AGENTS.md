@@ -31,7 +31,7 @@ src/
 ├── recordrtc.d.ts            # Type declaration for RecordRTC (any)
 ├── vite-env.d.ts             # Vite client types
 ├── components/
-│   ├── AudioVisualizerG.tsx  # ~2635 lines — main component
+│   ├── AudioVisualizerG.tsx  # ~2758 lines — main component
 │   ├── ConversionProgress.tsx # Cyberpunk terminal overlay during WebM→MP4 conversion
 │   └── IAAsistentPanel.tsx   # IA Assistant checkbox + mode selector + BPM/beat status + playback controls
 ├── hooks/
@@ -54,7 +54,7 @@ Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
 
 | Component | Props | Purpose |
 |-----------|-------|---------|
-| `CollapsibleSection` | title, icon, collapsed, onToggle, children | Accessible collapsible with `aria-expanded`/`aria-controls`, smooth max-h transition |
+| `CollapsibleSection` | title, icon, collapsed, onToggle, children, sectionBg? | Accessible collapsible with `aria-expanded`/`aria-controls`, smooth max-h transition |
 | `FileDropZone` | onDrop, children | Drag-and-drop wrapper with visual overlay feedback |
 
 ## Utilities & constants
@@ -62,7 +62,7 @@ Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
 | Symbol | Value/Purpose |
 |--------|---------------|
 | `TWO_PI` | `2π` |
-| `GOLDEN_ANGLE` | `2.39996…` (phyllotaxis spiral) |
+| `GOLDEN_ANGLE` | `2.39996…` (phyllotaxis spiral, defined inside component) |
 | `formatBytes(n)` | B/KB/MB/GB formatting |
 | `clamp(n, min, max)` | Number clamping |
 | `hexToRgba(hex, alpha)` | Hex → `rgba(r,g,b,a)` |
@@ -98,14 +98,15 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 
 | # | Section | Content |
 |---|---------|---------|
-| 0 | — | **IA Assistant** checkbox + mode (agresivo/sensible) + BPM + compás + mini waveform + **Volumen slider + [Previsualizar \| Detener] + Loop** |
+| 0 | — | **IA Assistant** checkbox + mode (agresivo/sensible) + BPM + compás + mini waveform + **Volumen slider + [Previsualizar \| Detener] + Loop** + botón **Colapsar** + botón **↺ Reset** |
 | 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
-| 3 | **Onda** (collapsible) | **Forma** (radio, intensidad, grosor, brillo), **Color** (color picker + gradiente select side by side, conditional Color 1/2) |
-| 4 | **Fondo** (collapsible) | 3 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove), **Fractal** (tipo, layer mode, opacidad, reactivo, preview, ripple/spiral/mandala controls) |
-| 5 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
-| 6 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
-| 7 | **Exportar** (collapsible) | Resolución 720p/1080p/4K, botón **Grabar y descargar** (icono rojo), advertencia foreground |
+| 3 | **Onda** (collapsible) | **Mostrar onda** checkbox, **Forma** (radio, intensidad, grosor, brillo), **Color** (color picker + gradiente select side by side, conditional Color 1/2) |
+| 4 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove) |
+| 5 | **Fractal** (collapsible) | Activar checkbox, tipo (ripple/spiral/mandala), reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
+| 6 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
+| 7 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
+| 8 | **Exportar** (collapsible) | Resolución 720p/1080p/4K, botón **Grabar y descargar** (icono rojo), advertencia foreground |
 
 ## Preset system
 
@@ -121,13 +122,23 @@ Reset defaults: single `resetDefaults()` button restores all 30+ state variables
 
 ## State defaults
 
+- `showWave` = `true`
 - `showParticles` = `false`
 - `bgMode` = `"color"`
+- `bgColor` = `"#000000"`
 - `fractalEnabled` = `false`
+- `fractalType` = `"ripple"`
+- `fractalLayerMode` = `"overlay"`
+- `fractalOpacity` = `0.8`
+- `fractalAudioReactive` = `true`
+- `particleColor` = `"#a78bfa"`
 - `particleOpacity` = `0.7`
-- `collapsedSections` starts with `"presets"`, `"wave"`, `"bg"`, `"particles"`, `"text"`, `"export"` (todo colapsado excepto Audio)
+- `collapsedSections` starts with `"presets"`, `"wave"`, `"bg"`, `"fractal"`, `"particles"`, `"text"`, `"export"` (todo colapsado excepto Audio)
 - Volume = 0.7, Loop = true
 - `radiusRatio` = `0.60`, `intensity` = `0.80`, `strokeWidth` = `1.0`, `glowIntensity` = `0.40`
+- `waveColor` = `"#ffffff"`, `waveGradientMode` = `"solid"`, `gradColor1` = `"#6366f1"`, `gradColor2` = `"#a855f7"`
+- `songTitle` = `""`, `titleColor` = `"#ffffff"`, `titlePreset` = `"bottom-center"`
+- `resolution` = `"1080p"`, `loop` = `true`, `isLoopingUI` = `true`
 
 ## Dual-canvas rendering pipeline
 
@@ -177,9 +188,9 @@ Two stacked `<canvas>` inside `relative w-full aspect-square`:
 
 | Type | Algorithm | Key params |
 |------|-----------|------------|
-| **Ripple** | Concentric sine-modulated rings: `r = baseR + sin(theta * freq + phase) * amp` | rings (3-20), speed (0.1-3), amplitude (2-60), thickness (0.5-6) |
-| **Spiral** | Phyllotaxis: `r = sqrt(i) * scale, angle = i * GA + rotation` | density (50-500), rotation (-3-3), tightness (0.1-1.5), dotSize (0.5-6) |
-| **Mandala** | Mirrored arc segments: `arc(0,0,r, -halfArc, +halfArc) × segments × complexity layers` | segments (3-24), rotation (-3-3), complexity (1-6), lineWidth (0.5-5) |
+| **Ripple** | Concentric sine-modulated rings: `r = baseR + sin(theta * freq + phase) * amp` | rings (3-20), speed (0.1-3), amplitude (2-60), thickness (0.5-18) |
+| **Spiral** | Phyllotaxis: `r = sqrt(i) * scale, angle = i * GA + rotation` | density (50-500), rotation (0-1), tightness (0.1-1.5), dotSize (3-12) |
+| **Mandala** | Mirrored arc segments: `arc(0,0,r, -halfArc, +halfArc) × segments × complexity layers` | segments (3-24), rotation (0-1), complexity (1-6), lineWidth (0.5-20) |
 
 Each has a static preview canvas (80×80) in the UI.
 
@@ -189,7 +200,7 @@ Each has a static preview canvas (80×80) in the UI.
 |-----------|---------|----------------------|
 | Ripple speed | `0.5 + amp * 0.5` | 1.0× |
 | Ripple amplitude | `0.3 + amp * 0.7` | 1.0× |
-| Spiral rotation | `0.5 + amp * 0.375` | 0.875× |
+| Spiral rotation | `0.7 + amp * 0.15` | 0.85× |
 | Spiral scale | `0.6 + amp * 0.8` | 1.4× |
 | Spiral dotSize | `0.5 + amp * 0.8` | 1.3× |
 | Mandala rotation | `0.5 + amp * 0.375` | 0.875× |
@@ -203,7 +214,7 @@ Sistema de control automático de parámetros visuales sincronizado con el ritmo
 | Archivo | Rol |
 |---------|------|
 | `src/hooks/useIAAsistent.ts` | Hook: BPM detection, beat scheduling, parameter changes |
-| `src/components/IAAsistentPanel.tsx` | UI: checkbox + modo + BPM/beat display + controles de playback (volumen, previsualizar/detener, loop) |
+| `src/components/IAAsistentPanel.tsx` | UI: checkbox + modo + BPM/beat display + mini waveform + controles de playback (volumen, previsualizar/detener, loop, colapsar, reset) |
 
 ### Tipos
 
@@ -241,14 +252,15 @@ Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de l
 
 ### Integración en AudioVisualizerG.tsx
 
-- **Hook** llamado después de `paramsRef` useEffect (línea ~440)
+- **Hook** llamado después de `paramsRef` useEffect (línea ~466)
 - **Ref** `iaStateRef` para acceso desde el closure del `tick()` sin re-renders
-- **Tick**: `ia.update(currentTime, getCurrentAmplitude())` después de `paramsRef.current` (línea ~1288)
+- **Tick**: `ia.update(currentTime, getCurrentAmplitude())` después de `paramsRef.current` (línea ~1390)
 - **Panel**: `<IAAsistentPanel>` renderizado al inicio del sidebar (antes de Reset)
 - **sampleRate** guardado en `sampleRateRef` durante `decodeAudioToMono`
-- **Fondo negro estático**: al activarse la IA, un `useEffect` pone `bgMode="fractal"`, `bgColor="#000000"`, `fractalEnabled=true`, `fractalLayerMode="overlay"`, además de fijar radio=0.50, intensidad=0.70, grosor=1.0 y opacidad partículas=0.10. El fondo nunca cambia mientras la IA está activa.
+- **Fondo negro estático**: al activarse la IA, un `useEffect` pone `bgMode="fractal"`, `bgColor="#000000"`, `fractalEnabled=true`, `fractalLayerMode="overlay"`, además de fijar radio=0.50, intensidad=0.70, grosor=1.0, opacidad partículas=0.10 y bgImage=null. El fondo nunca cambia mientras la IA está activa.
 - **Visibilidad de controles fractales**: los controles del fractal se muestran también cuando `fractalEnabled=true` aunque `bgMode !== "fractal"` (para que el usuario vea los cambios de la IA).
 - **Playback controls**: Volume slider, Previsualizar/Detener buttons y Loop checkbox renderizados dentro de IAAsistentPanel (debajo del mini waveform), eliminados de la sección Exportar.
+- **Botón Colapsar y ↺ Reset**: renderizados dentro del panel IA (prop `onCollapseAll` y `onResetDefaults`).
 
 ## Canvas sizing
 

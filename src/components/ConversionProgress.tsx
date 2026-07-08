@@ -180,7 +180,7 @@ export default function ConversionProgress({ logs, visible, currentFrame, totalF
             className="mt-3 border-t pt-2 text-[10px] uppercase tracking-[0.15em]"
             style={{ borderColor: `${GREEN}40`, color: DIM_GREEN }}
           >
-            ─── Frame {currentFrame ?? "?"} · {logs.length} líneas · ~{totalFrames ?? "?"} total ───
+            ─── Frame: {currentFrame ?? "?"} de ~{totalFrames ?? "?"} ───
           </div>
         </div>
 
