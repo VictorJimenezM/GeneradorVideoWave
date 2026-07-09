@@ -497,7 +497,7 @@ export default function AudioVisualizer() {
     redrawFractalCanvas();
   }, [
     showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImageFilter, bgImage,
-    showTitle, songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
+    showTitle, songTitle, titleColor, titlePreset, titleFont, titleWeight, titleItalic, titleAlign, titleValign, titleSizeScale, titleCurve, titleMotion, titleMotionAmount, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
     fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
     spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
