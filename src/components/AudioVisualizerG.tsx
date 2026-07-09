@@ -1594,6 +1594,7 @@ export default function AudioVisualizer() {
     setGradColor2(p.gradColor2);
     setParticleColor(p.particleColor);
     setParticleOpacity(p.particleOpacity);
+    setShowParticles(idx !== 0);
     setWavePresetIdx(WAVE_PRESETS.indexOf(p));
   }, []);
 
