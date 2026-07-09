@@ -454,7 +454,7 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
   - **MAJOR**: cambios incompatibles o rediseño visual grande
   - **MINOR**: nuevas funcionalidades, secciones o integraciones
   - **PATCH**: bugfixes, ajustes UI, refactors menores
-- **Sugerencia de bump pendiente**: la reestructuración del panel IA (cabecera de 2 columnas, modal de confirmación en Reset, iconos en Previsualizar/Detener, placeholder de mini wave) y el botón de exportar plano ameritan **v1.2.0** (MINOR). Actualizar el string en `App.tsx` al hacer push.
+- **Sugerencia de bump pendiente**: Los cambios recientes (stepper y reordenación) ya se aplicaron como **v1.3.0** (MINOR). Actualizar el string en `App.tsx` al hacer push.
 
 ## Refactoring history
 
