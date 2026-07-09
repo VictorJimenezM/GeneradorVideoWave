@@ -1,6 +1,12 @@
+import { useRef, type ChangeEvent } from "react";
 import CollapsibleSection from "../CollapsibleSection";
-import FileDropZone from "../FileDropZone";
 import { bgPresets } from "../../utils/fondo";
+
+interface BgImageSample {
+  id: string;
+  label: string;
+  src: string;
+}
 
 interface Props {
   collapsed: boolean;
@@ -16,11 +22,20 @@ interface Props {
   handleBgImagePresetChange: (v: string) => void;
   bgImage: HTMLImageElement | null;
   onPickBgImage: (file: File | null) => void;
-  BG_IMAGE_PRESETS: Array<{ id: string; label: string; src: string }>;
+  bgImagePresets: BgImageSample[];
+  onReplaceBgImagePreset: (id: string, file: File) => void;
+  onResetBgImagePreset: (id: string) => void;
   isDecoding: boolean;
   isRecording: boolean;
   isPreviewing: boolean;
 }
+
+const DEFAULT_BG_SAMPLES: BgImageSample[] = [
+  { id: "1", label: "Muestra 1", src: "/fondo_muestra_1.png" },
+  { id: "2", label: "Muestra 2", src: "/fondo_muestra_2.png" },
+  { id: "3", label: "Muestra 3", src: "/fondo_muestra_3.png" },
+  { id: "4", label: "Muestra 4", src: "/fondo_muestra_4.jpg" },
+];
 
 export default function BgSection({
   collapsed, onToggle,
@@ -29,9 +44,22 @@ export default function BgSection({
   bgColor, setBgColor, setActiveBgPreset,
   bgImagePreset, handleBgImagePresetChange,
   bgImage, onPickBgImage,
-  BG_IMAGE_PRESETS,
+  bgImagePresets, onReplaceBgImagePreset, onResetBgImagePreset,
   isDecoding, isRecording, isPreviewing,
 }: Props) {
+  const handleReplace = (id: string, e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onReplaceBgImagePreset(id, file);
+    e.target.value = "";
+  };
+
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const handleSlotClick = (id: string) => {
+    handleBgImagePresetChange(id);
+    fileInputRefs.current[id]?.click();
+  };
+
   return (
     <CollapsibleSection
       title="Fondo"
@@ -88,37 +116,76 @@ export default function BgSection({
       <div className={`overflow-hidden transition-all duration-250 ease-in-out ${
         bgMode === "image" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
       }`}>
-        <div className="pt-0.5 space-y-1">
-          <select value={bgImagePreset} onChange={(e) => handleBgImagePresetChange(e.target.value)}
-            aria-label="Imagen de fondo predefinida"
-            disabled={isDecoding || isRecording}
-            className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-          >
-            <option value="custom">Ninguna</option>
-            {BG_IMAGE_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </select>
-          <FileDropZone onDrop={(file) => onPickBgImage(file)}>
-            <input
-              type="file"
-              accept="image/*"
-              aria-label="Seleccionar imagen de fondo"
-              disabled={isDecoding || isRecording || isPreviewing}
-              className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-xs text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-cyan-200 hover:file:bg-cyan-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-              onChange={(e) => onPickBgImage(e.target.files?.[0] ?? null)}
-            />
-          </FileDropZone>
-          {bgImage && (
-            <button
-              type="button"
-              onClick={() => onPickBgImage(null)}
-              aria-label="Remover imagen de fondo"
-              className="self-start rounded-lg px-1.5 py-0.5 text-xs text-rose-400 transition-all duration-200 hover:bg-rose-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-            >
-              Remover
-            </button>
-          )}
+        <div className="pt-0.5 space-y-1.5">
+          <div className="grid grid-cols-2 gap-1.5">
+            {bgImagePresets.map((p) => {
+              const isActive = bgImagePreset === p.id;
+              const isCustomized = p.src !== (DEFAULT_BG_SAMPLES.find((d) => d.id === p.id)?.src ?? p.src);
+              return (
+                <div key={p.id} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => handleSlotClick(p.id)}
+                    disabled={isDecoding || isRecording}
+                    aria-label="Click para cambiar imagen"
+                    className={`group block w-full overflow-hidden rounded-lg border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
+                      isActive
+                        ? "border-cyan-400/70 ring-1 ring-cyan-400/40"
+                        : "border-slate-700/50 hover:border-slate-600/50"
+                    }`}
+                  >
+                    <div className="relative aspect-square w-full bg-slate-900">
+                      <img src={p.src} alt={p.label} className="h-full w-full object-cover" />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-slate-950/70 px-1 py-1 text-center text-[11px] font-medium text-cyan-200">
+                        Click para cambiar imagen
+                      </div>
+                    </div>
+                    <div className={`px-1 py-0.5 text-[11px] font-medium text-center truncate ${
+                      isActive ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-800/60 text-slate-400"
+                    }`}>
+                      {p.label}
+                    </div>
+                  </button>
+                  <input
+                    ref={(el) => { fileInputRefs.current[p.id] = el; }}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={isDecoding || isRecording || isPreviewing}
+                    onChange={(e) => handleReplace(p.id, e)}
+                  />
+                  <div className="absolute right-0.5 top-0.5 flex gap-0.5">
+                    <label
+                      className="cursor-pointer rounded bg-slate-950/70 px-1 text-[10px] text-cyan-200 hover:bg-slate-950/90"
+                      aria-label={`Reemplazar ${p.label}`}
+                      title="Reemplazar"
+                    >
+                      ⟳
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isDecoding || isRecording || isPreviewing}
+                        onChange={(e) => handleReplace(p.id, e)}
+                      />
+                    </label>
+                    {isCustomized && (
+                      <button
+                        type="button"
+                        onClick={() => onResetBgImagePreset(p.id)}
+                        disabled={isDecoding || isRecording}
+                        aria-label={`Restaurar ${p.label}`}
+                        title="Restaurar original"
+                        className="rounded bg-slate-950/70 px-1 text-[10px] text-slate-300 hover:bg-slate-950/90"
+                      >
+                        ↺
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </CollapsibleSection>

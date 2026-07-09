@@ -135,8 +135,9 @@ export default function AudioVisualizer() {
     setSongTitle("");
     setTitleColor("#ffffff");
     setTitlePreset("bottom-center");
-    setBgMode("color");
+    setBgMode("image");
     setActiveBgPreset("dark");
+    persistBgImageSamples(DEFAULT_BG_SAMPLES);
     setFractalEnabled(false);
     setFractalType("ripple");
     setFractalLayerMode("overlay");
@@ -165,15 +166,21 @@ export default function AudioVisualizer() {
     setInstinctStrength(25);
     setInstinctFrequency(0.01);
     setInstinctEnabled(false);
-    setBgImage(null);
-    bgImageRef.current = null;
-    setBgImagePreset("custom");
+    setBgImagePreset("1");
+    const resetImg = new Image();
+    resetImg.onload = () => {
+      setBgImage(resetImg);
+      bgImageRef.current = resetImg;
+      drawBgToFondoCanvas();
+      clearCanvasSolid();
+    };
+    resetImg.src = DEFAULT_BG_SAMPLES[0].src;
     setActivePreset(null);
     showToast("Valores restablecidos");
   }, [showToast]);
 
   // Background mode: color | image | fractal (mutually exclusive)
-  const [bgMode, setBgMode] = useState<"color" | "image" | "fractal">("color");
+  const [bgMode, setBgMode] = useState<"color" | "image" | "fractal">("image");
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [presetSavedKeys, setPresetSavedKeys] = useState<Set<string>>(() => {
     try {
@@ -342,15 +349,40 @@ export default function AudioVisualizer() {
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
 
-  const BG_IMAGE_PRESETS = [
+  type BgImageSample = { id: string; label: string; src: string };
+
+  const DEFAULT_BG_SAMPLES: BgImageSample[] = [
     { id: "1", label: "Muestra 1", src: "/fondo_muestra_1.png" },
     { id: "2", label: "Muestra 2", src: "/fondo_muestra_2.png" },
     { id: "3", label: "Muestra 3", src: "/fondo_muestra_3.png" },
     { id: "4", label: "Muestra 4", src: "/fondo_muestra_4.jpg" },
-    { id: "5", label: "Muestra 5", src: "/fondo_muestra_5.png" },
   ];
 
-  const [bgImagePreset, setBgImagePreset] = useState<string>("custom");
+  const loadBgImageSamples = (): BgImageSample[] => {
+    try {
+      const raw = localStorage.getItem("bgImageSamples");
+      if (raw) {
+        const parsed = JSON.parse(raw) as BgImageSample[];
+        if (Array.isArray(parsed) && parsed.length === DEFAULT_BG_SAMPLES.length) return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_BG_SAMPLES;
+  };
+
+  const [bgImagePresets, setBgImagePresets] = useState<BgImageSample[]>(loadBgImageSamples);
+
+  const persistBgImageSamples = (next: BgImageSample[]) => {
+    setBgImagePresets(next);
+    try {
+      localStorage.setItem("bgImageSamples", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const [bgImagePreset, setBgImagePreset] = useState<string>("1");
 
   // Live parameters (state + refs for drawing loop).
   const [showWave, setShowWave] = useState(true);
@@ -1388,7 +1420,7 @@ export default function AudioVisualizer() {
       return;
     }
     setBgMode("image");
-    const preset = BG_IMAGE_PRESETS.find(p => p.id === presetId);
+    const preset = bgImagePresets.find(p => p.id === presetId);
     if (!preset) return;
     const img = new Image();
     img.onload = () => {
@@ -1400,7 +1432,57 @@ export default function AudioVisualizer() {
     img.src = preset.src;
   };
 
+  const replaceBgImagePreset = useCallback((id: string, file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setBgImagePresets((prev) => {
+        const next = prev.map((p) => (p.id === id ? { ...p, src: dataUrl } : p));
+        try {
+          localStorage.setItem("bgImageSamples", JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+      const img = new Image();
+      img.onload = () => {
+        setBgImage(img);
+        bgImageRef.current = img;
+        drawBgToFondoCanvas();
+        clearCanvasSolid();
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const resetBgImagePreset = useCallback((id: string) => {
+    const def = DEFAULT_BG_SAMPLES.find((p) => p.id === id);
+    if (!def) return;
+    setBgImagePresets((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...def } : p));
+      try {
+        localStorage.setItem("bgImageSamples", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+    if (bgImagePreset === id) {
+      const img = new Image();
+      img.onload = () => {
+        setBgImage(img);
+        bgImageRef.current = img;
+        drawBgToFondoCanvas();
+        clearCanvasSolid();
+      };
+      img.src = def.src;
+    }
+  }, [bgImagePreset]);
+
   const loadSampleBgImage = useCallback(() => {
+    const first = bgImagePresets[0];
     const loadFallback = () => {
       const canvas = document.createElement("canvas");
       canvas.width = 640;
@@ -1443,8 +1525,8 @@ export default function AudioVisualizer() {
       clearCanvasSolid();
     };
     img.onerror = loadFallback;
-    img.src = "/fondo_muestra_1.png";
-  }, []);
+    img.src = first.src;
+  }, [bgImagePresets]);
 
   const saveCurrentToActivePreset = useCallback(() => {
     const key = activePreset;
@@ -1643,6 +1725,7 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     ensureCanvasContext();
+    loadSampleBgImage();
     initFFmpeg()
       .then(() => { console.log("[app] ✓ FFmpeg listo"); setFfmpegReady(true); })
       .catch(e => console.warn("[app] ✗ FFmpeg no disponible:", e));
@@ -1732,7 +1815,9 @@ export default function AudioVisualizer() {
               handleBgImagePresetChange={handleBgImagePresetChange}
               bgImage={bgImage}
               onPickBgImage={onPickBgImage}
-              BG_IMAGE_PRESETS={BG_IMAGE_PRESETS}
+              bgImagePresets={bgImagePresets}
+              onReplaceBgImagePreset={replaceBgImagePreset}
+              onResetBgImagePreset={resetBgImagePreset}
               isDecoding={isDecoding}
               isRecording={isRecording}
               isPreviewing={isPreviewing}
