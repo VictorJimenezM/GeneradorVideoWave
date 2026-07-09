@@ -341,6 +341,21 @@ Fractal, SUB y Onda usan un stepper con dos flechas en el header.
 - **Body** (Fractal/SUB): icono + nombre completo (`🌊 WATER`, `🌊 ONDAS (RIPPLE)`) con borde inferior, encima de los controles.
 - Posicionamiento: `justify-end` en el wrapper `flex-1` del `headerCenter` para que el stepper quede pegado a `titleButtons`.
 
+### Presets de Onda (stepper del header)
+
+La sección **Onda** del sidebar incluye un stepper `‹ 🌊 1/4 ›` con 4 posiciones de suave → agresivo. Su propósito es aplicar combinaciones de parámetros de la onda de forma rápida, exactamente igual que si un usuario moviera cada control manualmente.
+
+- **Constante**: `WAVE_PRESETS` (definida en `AudioVisualizerG.tsx`) — array de 4 objetos `{ icon, label, radiusRatio, intensity, strokeWidth, glowIntensity, waveColor, waveGradientMode, gradColor1, gradColor2, particleColor, particleOpacity }`.
+- **Estado**: `wavePresetIdx` (índice actual) y función `applyWavePreset(idx)`.
+- **Qué mueve cada preset** (vía los mismos setters que los sliders/color pickers):
+  1. **🌊 1 — Suave**: radio 0.60, intensidad 0.30, grosor 0.6, brillo 0.10, onda `#e2e8f0` sólido, partículas `#cbd5e1` opacidad 0.40, **partículas OFF**.
+  2. **💧 2 — Medio**: radio 0.52, intensidad 0.50, grosor 1.5, brillo 0.30, onda `#a78bfa` gradiente (`#6366f1`→`#a855f7`), partículas `#a78bfa` opacidad 0.60, **partículas ON**.
+  3. **⚡ 3 — Intenso**: radio 0.46, intensidad 0.68, grosor 3.0, brillo 0.55, onda `#f0abfc` gradiente (`#ec4899`→`#8b5cf6`), partículas `#f0abfc` opacidad 0.78, **partículas ON**.
+  4. **🔥 4 — Agresivo**: radio 0.40, intensidad 0.80, grosor 6.0, brillo 0.85, onda `#ffffff` arcoíris, partículas `#f43f5e` opacidad 0.92, **partículas ON**.
+- **`showParticles`**: el preset 1 (más pasivo) apaga el toggle de partículas; los presets 2-4 lo encienden, para que el efecto de partículas sea visible desde el nivel medio.
+- **No toca nada más**: solo invoca setters de estado; no afecta render/tick, IA Assistant, fractal, fondo, `layerOrder` ni los presets generales (`applyQuickPreset`). `resetDefaults()` fija `wavePresetIdx=0`.
+- **Deshabilitado** durante decodificación (`isDecoding`) y grabación (`isRecording`).
+
 ### Instinct internal coefficients
 
 | Modo | Coeficiente | Detalle |
