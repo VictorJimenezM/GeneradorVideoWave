@@ -135,7 +135,7 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 | 0 | — | **Panel IA Assistant** en grid de 2 columnas (ver detalle abajo) |
 | 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
-| 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)) |
+| 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)). Header con **doble stepper**: `‹ N/4 ›` (muestra) + `‹ Normal ›` (filtro de color), ver [Steppers del header de Fondo](#steppers-del-header-de-fondo) |
 | 4 | **Fractal** (collapsible) | Stepper `‹🌊›` para tipo (ripple/spiral/mandala), checkbox reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
 | 5 | **Subconciencia + Onda** (collapsible, **bloque acoplado**) | Dos `CollapsibleSection` dentro de un `div.relative` con **un solo par ▲/▼** que mueve todo el bloque. Siempre juntos — Subconciencia (stepper `‹🌊›` + sliders velocidad/intensidad/frecuencia + preview 80×80) se renderiza primero y Onda (check + forma + color + partículas) encima. Partículas embebidas dentro de Onda. |
 | 6 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
@@ -201,6 +201,24 @@ La pestaña **Imagen** del Fondo ya no usa un `<select>` ni un upload único: mu
 - `resetDefaults()` vuelve a **Muestra 1 (imagen)**: restaura `bgImagePresets` a `DEFAULT_BG_SAMPLES`, limpia el override de `localStorage` y carga `DEFAULT_BG_SAMPLES[0].src`.
 - Se eliminaron los botones **"Sin imagen (Ninguna)"** y **"Remover"** de la UI.
 - La quinta muestra (`fondo_muestra_5.png`) se descartó por completo (archivo y referencias).
+
+### Steppers del header de Fondo
+
+El header de la sección Fondo usa la prop `headerCenter` de `CollapsibleSection` con **dos steppers** (mismo estilo que Fractal/SUB: `‹`/`›` con `bg-fuchsia-900/40`, wrap-around infinito, `e.stopPropagation()` para no colapsar), combinados en un `<span className="flex items-center gap-1.5 flex-1 justify-end">`:
+
+- **Stepper de muestra** (`‹ N/4 ›`): rota entre las 4 muestras (`bgImagePresets`) con `handleBgImagePresetChange`; muestra `{idx+1}/{total}`. Al usarlo selecciona la muestra y activa modo Imagen.
+- **Stepper de filtro** (`‹ Normal ›`): rota entre `BG_IMAGE_FILTERS` y aplica `bgImageFilter` a la imagen seleccionada. Centro muestra la etiqueta del filtro (p.ej. "Gris").
+
+Los filtros se aplican en `drawFondoCanvas()` vía `ctx.filter` (solo afecta a la imagen, no al color sólido) y se pasan tanto en `redrawFondoCanvas()` (idle) como en `tick()` (preview/grabación) mediante `getBgFilterCss()`. `bgImageFilter` vive en estado y en `paramsRef`. **No se guarda en el sistema de presets**.
+
+| Filtro | Valor | CSS |
+|--------|-------|-----|
+| Normal | `none` | `none` |
+| Gris | `grayscale` | `grayscale(1)` |
+| Sepia | `sepia` | `sepia(1)` |
+| Invertir | `invert` | `invert(1)` |
+| Vívido | `vivid` | `saturate(1.8)` |
+| Frío | `cool` | `hue-rotate(180deg)` |
 
 ## Preset system
 
@@ -478,4 +496,5 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - **v1.2.0 (sugerido)** — Rediseño del panel IA Assistant: cabecera en grid de 2 columnas (mini wave cuadrado en col 1; controles en col 2), botón Previsualizar con iconos play+ojo y hover-texto, Detener solo icono, Reset con `ConfirmModal`, Volumen en fila compacta; botón "Grabar y descargar" plano. Nuevo `src/components/ConfirmModal.tsx`.
 - **v1.3.0** — Stepper mode selector (`‹ / ›`) para Fractal y SUB con wrap-around infinito. Nueva prop `headerCenter` en `CollapsibleSection`. Reorder buttons siempre visibles (sin dependencia de `allCollapsed`). Ghost button `▼` invisible en SUB para equilibrio visual. Constantes exportadas `INSTINCT_MODES` y `FRACTAL_TYPES`. Reordenación de defaults: `instinctSpeed=0.5`, `instinctStrength=25`, `instinctFrequency=0.012`, `rippleThickness=4.0`. Coeficientes internos: organic `×3.5`, abyss speed `÷2`. Audio section starts expanded por defecto.
 - **v1.4.0** — Gestor de muestras de imagen de fondo: `bgImagePresets` pasa a estado dinámico de 4 muestras persistido en `localStorage["bgImageSamples"]` (reemplazo por ranura con dataURL + restauración). Cuadrícula 2×2 con overlay "Click para cambiar imagen" (click selecciona y reemplaza). Carga Muestra 1 por defecto al iniciar. Se eliminan los botones "Sin imagen (Ninguna)" y "Remover". Se descarta `fondo_muestra_5.png`. `resetDefaults()` vuelve a Muestra 1 (imagen).
+- **v1.4.1** — Doble stepper en el header de Fondo: `‹ N/4 ›` rota entre las 4 muestras y `‹ Normal ›` aplica un filtro de color (`BG_IMAGE_FILTERS`: Normal/Gris/Sepia/Invertir/Vívido/Frío) a la imagen vía `ctx.filter` en `drawFondoCanvas()`. Aplica en preview y grabación; no se guarda en presets.
 

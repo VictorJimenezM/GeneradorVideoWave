@@ -23,7 +23,7 @@ import { INSTINCT_MODES, drawInstinctFractal, drawInstinctPreview } from "../uti
 import { fftLikePointsPerCircle, getPointXY, drawAdditionalPath, drawTip, drawStaticWaveform, type Point, type WaveStyle } from "../utils/wave";
 import { emitParticles, updateAndDrawParticles } from "../utils/particles";
 import { TITLE_PRESETS, drawTitle } from "../utils/title";
-import { bgPresets, drawFondoCanvas } from "../utils/fondo";
+import { bgPresets, drawFondoCanvas, getBgFilterCss, type BgImageFilter } from "../utils/fondo";
 import { syncAllCanvasSizes as syncSizes, setCanvasVideoSize as setVideoSize, clearCanvasSolid as clearCanvas } from "../utils/canvas";
 import { buildPrecomputedGeometry as buildGeo, getCurrentAmplitude as getAmp } from "../utils/audio";
 
@@ -137,6 +137,7 @@ export default function AudioVisualizer() {
     setTitlePreset("bottom-center");
     setBgMode("image");
     setActiveBgPreset("dark");
+    setBgImageFilter("none");
     persistBgImageSamples(DEFAULT_BG_SAMPLES);
     setFractalEnabled(false);
     setFractalType("ripple");
@@ -383,6 +384,7 @@ export default function AudioVisualizer() {
   };
 
   const [bgImagePreset, setBgImagePreset] = useState<string>("1");
+  const [bgImageFilter, setBgImageFilter] = useState<BgImageFilter>("none");
 
   // Live parameters (state + refs for drawing loop).
   const [showWave, setShowWave] = useState(true);
@@ -399,6 +401,7 @@ export default function AudioVisualizer() {
     strokeWidth,
     waveColor,
     bgColor,
+    bgImageFilter,
     showTitle,
     songTitle,
     titleColor,
@@ -445,7 +448,7 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     paramsRef.current = {
-      showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor,
+      showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImageFilter,
       showTitle, songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
       fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
@@ -456,7 +459,7 @@ export default function AudioVisualizer() {
     redrawFondoCanvas();
     redrawFractalCanvas();
   }, [
-    showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImage,
+    showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImageFilter, bgImage,
     showTitle, songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
     fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
@@ -818,7 +821,7 @@ export default function AudioVisualizer() {
     if (drawingModeRef.current !== "idle") return;
 
     syncAllCanvasSizes();
-    drawFondoCanvas(fctx, fc, paramsRef.current.bgColor, bgImageRef.current);
+    drawFondoCanvas(fctx, fc, paramsRef.current.bgColor, bgImageRef.current, getBgFilterCss(paramsRef.current.bgImageFilter));
   };
 
   const redrawFractalCanvas = () => {
@@ -900,7 +903,7 @@ export default function AudioVisualizer() {
     const fondoCanvas = fondoCanvasRef.current;
     const fondoCtx = fondoCtxRef.current;
     if (fondoCanvas && fondoCtx) {
-      drawFondoCanvas(fondoCtx, fondoCanvas, p.bgColor, bgImageRef.current);
+      drawFondoCanvas(fondoCtx, fondoCanvas, p.bgColor, bgImageRef.current, getBgFilterCss(p.bgImageFilter));
     }
 
     // --- 2. FRACTAL CANVAS (z1) — ripple/spiral/mandala ---
@@ -1818,6 +1821,8 @@ export default function AudioVisualizer() {
               bgImagePresets={bgImagePresets}
               onReplaceBgImagePreset={replaceBgImagePreset}
               onResetBgImagePreset={resetBgImagePreset}
+              bgImageFilter={bgImageFilter}
+              setBgImageFilter={setBgImageFilter}
               isDecoding={isDecoding}
               isRecording={isRecording}
               isPreviewing={isPreviewing}

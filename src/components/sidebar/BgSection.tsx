@@ -1,6 +1,6 @@
 import { useRef, type ChangeEvent } from "react";
 import CollapsibleSection from "../CollapsibleSection";
-import { bgPresets } from "../../utils/fondo";
+import { bgPresets, BG_IMAGE_FILTERS, type BgImageFilter } from "../../utils/fondo";
 
 interface BgImageSample {
   id: string;
@@ -25,6 +25,8 @@ interface Props {
   bgImagePresets: BgImageSample[];
   onReplaceBgImagePreset: (id: string, file: File) => void;
   onResetBgImagePreset: (id: string) => void;
+  bgImageFilter: BgImageFilter;
+  setBgImageFilter: (v: BgImageFilter) => void;
   isDecoding: boolean;
   isRecording: boolean;
   isPreviewing: boolean;
@@ -45,6 +47,7 @@ export default function BgSection({
   bgImagePreset, handleBgImagePresetChange,
   bgImage, onPickBgImage,
   bgImagePresets, onReplaceBgImagePreset, onResetBgImagePreset,
+  bgImageFilter, setBgImageFilter,
   isDecoding, isRecording, isPreviewing,
 }: Props) {
   const handleReplace = (id: string, e: ChangeEvent<HTMLInputElement>) => {
@@ -60,9 +63,57 @@ export default function BgSection({
     fileInputRefs.current[id]?.click();
   };
 
+  const curIdx = Math.max(0, bgImagePresets.findIndex((p) => p.id === bgImagePreset));
+  const sampleCount = bgImagePresets.length;
+  const bgImageStepper = (
+    <span className="flex items-center justify-between" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={() => handleBgImagePresetChange(bgImagePresets[(curIdx - 1 + sampleCount) % sampleCount].id)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Muestra anterior"
+      >‹</button>
+      <span className="text-xs leading-none text-slate-300 tabular-nums">
+        {curIdx + 1}/{sampleCount}
+      </span>
+      <button type="button" onClick={() => handleBgImagePresetChange(bgImagePresets[(curIdx + 1) % sampleCount].id)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Siguiente muestra"
+      >›</button>
+    </span>
+  );
+
+  const curFilterIdx = Math.max(0, BG_IMAGE_FILTERS.findIndex((f) => f.value === bgImageFilter));
+  const filterCount = BG_IMAGE_FILTERS.length;
+  const bgFilterStepper = (
+    <span className="flex items-center justify-between" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={() => setBgImageFilter(BG_IMAGE_FILTERS[(curFilterIdx - 1 + filterCount) % filterCount].value)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Filtro anterior"
+      >‹</button>
+      <span className="text-xs leading-none text-slate-300 px-1 min-w-[3.5rem] text-center">
+        {BG_IMAGE_FILTERS[curFilterIdx].label}
+      </span>
+      <button type="button" onClick={() => setBgImageFilter(BG_IMAGE_FILTERS[(curFilterIdx + 1) % filterCount].value)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Siguiente filtro"
+      >›</button>
+    </span>
+  );
+
+  const bgHeaderCenter = (
+    <span className="flex items-center gap-1.5 flex-1 justify-end">
+      {bgImageStepper}
+      {bgFilterStepper}
+    </span>
+  );
+
   return (
     <CollapsibleSection
       title="Fondo"
+      headerCenter={bgHeaderCenter}
       collapsed={collapsed}
       onToggle={onToggle}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.6)]" />}
