@@ -89,7 +89,7 @@ export default function App() {
             Desarrollado con Vite + React + Tailwind, Cursos, Opencode y Ig Pickle
           </p>
         </footer>
-        <p className="pb-4 text-center text-xs text-slate-600">Version 1.5.1</p>
+        <p className="pb-4 text-center text-xs text-slate-600">Version 1.6.0</p>
       </div>
     </div>
   );

@@ -22,7 +22,7 @@ import { drawFractalBackground as drawFractalBg, drawFractalPreview as drawFract
 import { INSTINCT_MODES, drawInstinctFractal, drawInstinctPreview } from "../utils/instinct";
 import { fftLikePointsPerCircle, getPointXY, drawAdditionalPath, drawTip, drawStaticWaveform, type Point, type WaveStyle } from "../utils/wave";
 import { emitParticles, updateAndDrawParticles } from "../utils/particles";
-import { TITLE_PRESETS, drawTitle } from "../utils/title";
+import { TITLE_PRESETS, drawTitle, resolveTitleFamily, type TitleStyle } from "../utils/title";
 import { bgPresets, drawFondoCanvas, getBgFilterCss, type BgImageFilter } from "../utils/fondo";
 import { syncAllCanvasSizes as syncSizes, setCanvasVideoSize as setVideoSize, clearCanvasSolid as clearCanvas } from "../utils/canvas";
 import { buildPrecomputedGeometry as buildGeo, getCurrentAmplitude as getAmp } from "../utils/audio";
@@ -136,6 +136,15 @@ export default function AudioVisualizer() {
     setSongTitle("");
     setTitleColor("#ffffff");
     setTitlePreset("bottom-center");
+    setTitleFont("arial");
+    setTitleWeight("bold");
+    setTitleItalic(false);
+    setTitleAlign("center");
+    setTitleValign("bottom");
+    setTitleSizeScale(1);
+    setTitleCurve(0);
+    setTitleMotion("none");
+    setTitleMotionAmount(0.3);
     setBgMode("image");
     setActiveBgPreset("dark");
     setBgImageFilter("none");
@@ -215,6 +224,15 @@ export default function AudioVisualizer() {
   const [songTitle, setSongTitle] = useState("");
   const [titleColor, setTitleColor] = useState("#ffffff");
   const [titlePreset, setTitlePreset] = useState("bottom-center");
+  const [titleFont, setTitleFont] = useState("arial");
+  const [titleWeight, setTitleWeight] = useState<"normal" | "bold">("bold");
+  const [titleItalic, setTitleItalic] = useState(false);
+  const [titleAlign, setTitleAlign] = useState<"left" | "center" | "right">("center");
+  const [titleValign, setTitleValign] = useState<"top" | "middle" | "bottom">("bottom");
+  const [titleSizeScale, setTitleSizeScale] = useState(1);
+  const [titleCurve, setTitleCurve] = useState(0);
+  const [titleMotion, setTitleMotion] = useState<"none" | "pulse" | "float" | "zoom" | "rotate">("none");
+  const [titleMotionAmount, setTitleMotionAmount] = useState(0.3);
 
   // UI / audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -416,6 +434,15 @@ export default function AudioVisualizer() {
     songTitle,
     titleColor,
     titlePreset,
+    titleFont,
+    titleWeight,
+    titleItalic,
+    titleAlign,
+    titleValign,
+    titleSizeScale,
+    titleCurve,
+    titleMotion,
+    titleMotionAmount,
     glowIntensity,
     showParticles,
     particleColor,
@@ -459,7 +486,7 @@ export default function AudioVisualizer() {
   useEffect(() => {
     paramsRef.current = {
       showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImageFilter,
-      showTitle, songTitle, titleColor, titlePreset, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
+      showTitle, songTitle, titleColor, titlePreset, titleFont, titleWeight, titleItalic, titleAlign, titleValign, titleSizeScale, titleCurve, titleMotion, titleMotionAmount, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
       fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
       spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
@@ -1050,13 +1077,27 @@ export default function AudioVisualizer() {
     const letrasCanvas = letrasCanvasRef.current;
     const letrasCtx = letrasCtxRef.current;
     if (letrasCanvas && letrasCtx) {
+      const titleStyle: TitleStyle = {
+        presetId: p.titlePreset,
+        family: resolveTitleFamily(p.titleFont),
+        weight: p.titleWeight,
+        italic: p.titleItalic,
+        align: p.titleAlign,
+        valign: p.titleValign,
+        sizeScale: p.titleSizeScale,
+        curve: p.titleCurve,
+        motion: p.titleMotion,
+        motionAmount: p.titleMotionAmount,
+        color: p.titleColor,
+      };
+      const titleTimeSec = now / 1000;
       if (!p.showTitle) {
         letrasCtx.clearRect(0, 0, letrasCanvas.width, letrasCanvas.height);
       } else if (isRecording) {
-        drawTitle(ctx, canvas, p.songTitle, p.titleColor, p.titlePreset);
+        drawTitle(ctx, canvas, p.songTitle, titleStyle, titleTimeSec);
       } else {
         letrasCtx.clearRect(0, 0, letrasCanvas.width, letrasCanvas.height);
-        drawTitle(letrasCtx, letrasCanvas, p.songTitle, p.titleColor, p.titlePreset);
+        drawTitle(letrasCtx, letrasCanvas, p.songTitle, titleStyle, titleTimeSec);
       }
     }
 
@@ -1555,6 +1596,7 @@ export default function AudioVisualizer() {
       glowIntensity, showParticles, particleColor, particleOpacity,
       radiusRatio, intensity, strokeWidth,
       showTitle, songTitle, titleColor, titlePreset,
+      titleFont, titleWeight, titleItalic, titleAlign, titleValign, titleSizeScale, titleCurve, titleMotion, titleMotionAmount,
       layerOrder,
     };
     localStorage.setItem(`quickPreset_${key}`, JSON.stringify(data));
@@ -1574,7 +1616,9 @@ export default function AudioVisualizer() {
     showWave, waveColor, waveGradientMode, gradColor1, gradColor2,
     glowIntensity, showParticles, particleColor, particleOpacity,
     radiusRatio, intensity, strokeWidth,
-    showTitle, songTitle, titleColor, titlePreset, layerOrder, showToast]);
+    showTitle, songTitle, titleColor, titlePreset,
+    titleFont, titleWeight, titleItalic, titleAlign, titleValign, titleSizeScale, titleCurve, titleMotion, titleMotionAmount,
+    layerOrder, showToast]);
 
   const loadSavedPreset = useCallback((key: string) => {
     const raw = localStorage.getItem(`quickPreset_${key}`);
@@ -1596,6 +1640,14 @@ export default function AudioVisualizer() {
     setParticleOpacity(p.particleOpacity);
     setShowParticles(idx !== 0);
     setWavePresetIdx(WAVE_PRESETS.indexOf(p));
+  }, []);
+
+  const applyTitlePreset = useCallback((id: string) => {
+    const p = TITLE_PRESETS.find((x) => x.id === id) || TITLE_PRESETS[0];
+    setTitleAlign(p.align as "left" | "center" | "right");
+    setTitleValign(p.valign as "top" | "middle" | "bottom");
+    setTitleSizeScale(1);
+    setTitlePreset(id);
   }, []);
 
   const applyQuickPreset = useCallback((key: string) => {
@@ -1655,6 +1707,15 @@ export default function AudioVisualizer() {
       setSongTitle(saved.songTitle);
       setTitleColor(saved.titleColor);
       if (saved.titlePreset) setTitlePreset(saved.titlePreset);
+      if (saved.titleFont) setTitleFont(saved.titleFont);
+      if (saved.titleWeight) setTitleWeight(saved.titleWeight);
+      if (typeof saved.titleItalic === "boolean") setTitleItalic(saved.titleItalic);
+      if (saved.titleAlign) setTitleAlign(saved.titleAlign);
+      if (saved.titleValign) setTitleValign(saved.titleValign);
+      if (typeof saved.titleSizeScale === "number") setTitleSizeScale(saved.titleSizeScale);
+      if (typeof saved.titleCurve === "number") setTitleCurve(saved.titleCurve);
+      if (saved.titleMotion) setTitleMotion(saved.titleMotion);
+      if (typeof saved.titleMotionAmount === "number") setTitleMotionAmount(saved.titleMotionAmount);
       if (saved.bgMode === "image") {
         loadSampleBgImage();
       } else if (saved.bgMode === "color") {
@@ -2010,6 +2071,25 @@ export default function AudioVisualizer() {
                       setTitlePreset={setTitlePreset}
                       titleColor={titleColor}
                       setTitleColor={setTitleColor}
+                      titleFont={titleFont}
+                      setTitleFont={setTitleFont}
+                      titleWeight={titleWeight}
+                      setTitleWeight={setTitleWeight}
+                      titleItalic={titleItalic}
+                      setTitleItalic={setTitleItalic}
+                      titleAlign={titleAlign}
+                      setTitleAlign={setTitleAlign}
+                      titleValign={titleValign}
+                      setTitleValign={setTitleValign}
+                      titleSizeScale={titleSizeScale}
+                      setTitleSizeScale={setTitleSizeScale}
+                      titleCurve={titleCurve}
+                      setTitleCurve={setTitleCurve}
+                      titleMotion={titleMotion}
+                      setTitleMotion={setTitleMotion}
+                      titleMotionAmount={titleMotionAmount}
+                      setTitleMotionAmount={setTitleMotionAmount}
+                      applyTitlePreset={applyTitlePreset}
                       moveLayer={moveLayer}
                       layerOrder={layerOrder}
                     />

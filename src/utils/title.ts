@@ -23,21 +23,132 @@ export const TITLE_PRESETS: TitlePreset[] = [
   { id: "compact", label: "Compacto", font: "'Courier New', monospace", weight: "bold", size: 0.02, align: "center", valign: "bottom", y: 0.95 },
 ];
 
+export type TitleFontGroup = "clasicas" | "extremas";
+
+export const TITLE_FONTS: { id: string; label: string; family: string; group: TitleFontGroup }[] = [
+  { id: "arial", label: "Arial", family: "Arial, Helvetica, sans-serif", group: "clasicas" },
+  { id: "times", label: "Times New Roman", family: "'Times New Roman', Times, serif", group: "clasicas" },
+  { id: "georgia", label: "Georgia", family: "Georgia, serif", group: "clasicas" },
+  { id: "courier", label: "Courier New", family: "'Courier New', monospace", group: "clasicas" },
+  { id: "pacifico", label: "Pacifico", family: "Pacifico, cursive", group: "extremas" },
+  { id: "bungee", label: "Bungee", family: "Bungee, sans-serif", group: "extremas" },
+  { id: "monoton", label: "Monoton", family: "Monoton, cursive", group: "extremas" },
+  { id: "rubik", label: "Rubik Wet Paint", family: "'Rubik Wet Paint', cursive", group: "extremas" },
+];
+
+export type TitleMotion = "none" | "pulse" | "float" | "zoom" | "rotate";
+
+export interface TitleStyle {
+  presetId: string;
+  family: string;
+  weight: "normal" | "bold";
+  italic: boolean;
+  align: CanvasTextAlign;
+  valign: CanvasTextBaseline;
+  sizeScale: number;
+  curve: number;
+  motion: TitleMotion;
+  motionAmount: number;
+  color: string;
+}
+
+export function resolveTitleFamily(fontId: string): string {
+  const f = TITLE_FONTS.find((x) => x.id === fontId);
+  return f ? f.family : "Arial, sans-serif";
+}
+
+function drawCurvedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  cy: number,
+  sizePx: number,
+  curve: number,
+  rot: number
+) {
+  const chars = Array.from(text);
+  const n = chars.length;
+  if (n === 0) return;
+  const spread = curve * Math.PI * 0.6;
+  const radius = sizePx * 6;
+  const centerY = cy - radius;
+  const startAngle = Math.PI / 2 - spread / 2;
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (rot !== 0) {
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    ctx.translate(-cx, -cy);
+  }
+  for (let i = 0; i < n; i++) {
+    const a = n === 1 ? Math.PI / 2 : startAngle + (spread * i) / (n - 1);
+    const px = cx + Math.cos(a) * radius;
+    const py = centerY + Math.sin(a) * radius;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.fillText(chars[i], 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 export function drawTitle(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   songTitle: string,
-  titleColor: string,
-  titlePresetId: string
+  style: TitleStyle,
+  timeSec = 0
 ) {
   if (!songTitle) return;
-  const preset = TITLE_PRESETS.find(p => p.id === titlePresetId) || TITLE_PRESETS[0];
+  const preset = TITLE_PRESETS.find((p) => p.id === style.presetId) || TITLE_PRESETS[0];
+
+  const baseSizePx = canvas.width * preset.size * style.sizeScale;
+  const t = timeSec;
+  const amt = style.motionAmount;
+
+  let motionScale = 1;
+  let yOffset = 0;
+  let rot = 0;
+  switch (style.motion) {
+    case "pulse":
+      motionScale = 1 + amt * 0.25 * Math.sin(t * 4);
+      break;
+    case "float":
+      yOffset = canvas.height * 0.03 * amt * Math.sin(t * 2);
+      break;
+    case "zoom":
+      motionScale = 1 + amt * 0.4 * Math.sin(t * 1.5);
+      break;
+    case "rotate":
+      rot = amt * 0.25 * Math.sin(t * 2);
+      break;
+    case "none":
+    default:
+      break;
+  }
+
+  const sizePx = Math.max(4, Math.floor(baseSizePx * motionScale));
+
   ctx.save();
-  ctx.fillStyle = titleColor;
-  ctx.font = `${preset.weight} ${Math.floor(canvas.width * preset.size)}px ${preset.font}`;
-  ctx.textAlign = preset.align as CanvasTextAlign;
-  ctx.textBaseline = preset.valign as CanvasTextBaseline;
+  ctx.fillStyle = style.color;
+  ctx.font = `${style.italic ? "italic " : ""}${style.weight} ${sizePx}px ${style.family}`;
+  ctx.textAlign = style.align;
+  ctx.textBaseline = style.valign;
+
   const x = preset.x !== undefined ? canvas.width * preset.x : canvas.width / 2;
-  ctx.fillText(songTitle, x, canvas.height * preset.y);
+  const y = canvas.height * preset.y + yOffset;
+
+  if (style.curve === 0) {
+    if (rot !== 0) {
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.translate(-x, -y);
+    }
+    ctx.fillText(songTitle, x, y);
+  } else {
+    drawCurvedText(ctx, songTitle, x, y, sizePx, style.curve, rot);
+  }
   ctx.restore();
 }
