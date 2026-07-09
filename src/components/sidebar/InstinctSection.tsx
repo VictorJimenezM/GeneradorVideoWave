@@ -1,10 +1,11 @@
-import { type Ref } from "react";
+import { type ReactNode, type Ref } from "react";
 import CollapsibleSection from "../CollapsibleSection";
-import type { InstinctMode } from "../../utils/instinct";
+import { INSTINCT_MODES } from "../../utils/instinct";
 
 interface Props {
   collapsed: boolean;
   onToggle: () => void;
+  allCollapsed?: boolean;
   instinctEnabled: boolean;
   setInstinctEnabled: (v: boolean) => void;
   instinctMode: InstinctMode;
@@ -18,12 +19,13 @@ interface Props {
   instinctPreviewRef: Ref<HTMLCanvasElement>;
   isDecoding: boolean;
   isRecording: boolean;
-  moveLayer: (layer: string, dir: number) => void;
-  layerOrder: string[];
+  titleButtons?: ReactNode;
+  headerBg?: string;
 }
 
 export default function InstinctSection({
   collapsed, onToggle,
+  allCollapsed,
   instinctEnabled, setInstinctEnabled,
   instinctMode, setInstinctMode,
   instinctSpeed, setInstinctSpeed,
@@ -31,43 +33,47 @@ export default function InstinctSection({
   instinctFrequency, setInstinctFrequency,
   instinctPreviewRef,
   isDecoding, isRecording,
-  moveLayer, layerOrder,
+  titleButtons,
+  headerBg,
 }: Props) {
-  const instinctTitleButtons = (
-    <>
-      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("instinct", -1); }}
-        disabled={layerOrder.indexOf("instinct") <= 0}
-        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        aria-label="Subir capa">▲</button>
-      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("instinct", 1); }}
-        disabled={layerOrder.indexOf("instinct") >= layerOrder.length - 1}
-        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        aria-label="Bajar capa">▼</button>
-    </>
+  const currentIdx = INSTINCT_MODES.findIndex(m => m.value === instinctMode);
+  const headerCenter = (
+    <span className="flex items-center gap-0" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={() => setInstinctMode(INSTINCT_MODES[(currentIdx - 1 + INSTINCT_MODES.length) % INSTINCT_MODES.length].value)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Modo anterior"
+      >‹</button>
+      <span className="text-xs leading-none text-slate-300">
+        {INSTINCT_MODES[currentIdx].icon}
+      </span>
+      <button type="button" onClick={() => setInstinctMode(INSTINCT_MODES[(currentIdx + 1) % INSTINCT_MODES.length].value)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Siguiente modo"
+      >›</button>
+    </span>
   );
+
   return (
     <CollapsibleSection
-      title="Subconciencia"
-      titleButtons={instinctTitleButtons}
+      title="SUB"
+      titleButtons={titleButtons}
+      headerCenter={headerCenter}
       enabled={instinctEnabled}
       onToggleEnabled={setInstinctEnabled}
       collapsed={collapsed}
       onToggle={onToggle}
+      allCollapsed={allCollapsed}
+      headerBg={headerBg}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(217,70,239,0.6)]" />}
       sectionBg="bg-fuchsia-950/30"
     >
-      <div className="flex flex-col gap-1">
-        {instinctEnabled && (
-          <>
-            <select value={instinctMode} onChange={(e) => setInstinctMode(e.target.value as InstinctMode)}
-              disabled={isDecoding || isRecording}
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-fuchsia-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-            >
-              <option value="water">🌊 Reflejo en agua</option>
-              <option value="organic">🧬 Formas orgánicas</option>
-              <option value="fragments">🎀 Fragmentos</option>
-              <option value="ifs">🔮 Autosimilar</option>
-            </select>
+      <div className={`flex flex-col gap-1 transition-all duration-200 ${instinctEnabled ? "" : "opacity-40 pointer-events-none select-none"}`}>
+            <div className="text-xs font-semibold tracking-wider text-fuchsia-400/80 uppercase flex items-center gap-1 pb-0.5 border-b border-slate-800/60 mb-1">
+              <span>{INSTINCT_MODES[currentIdx].icon}</span>
+              <span>{INSTINCT_MODES[currentIdx].label}</span>
+            </div>
             <label className="block">
               <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
                 <span>Velocidad</span>
@@ -94,8 +100,6 @@ export default function InstinctSection({
                 className="w-[80px] h-[80px] rounded-lg border border-slate-700/50 bg-slate-950/80"
                 aria-label="Vista previa del instinto" />
             </div>
-          </>
-        )}
       </div>
     </CollapsibleSection>
   );

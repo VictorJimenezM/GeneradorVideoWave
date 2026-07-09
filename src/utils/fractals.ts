@@ -1,5 +1,11 @@
 export type FractalType = "ripple" | "spiral" | "mandala";
 
+export const FRACTAL_TYPES: { value: FractalType; icon: string; label: string }[] = [
+  { value: "ripple", icon: "🌊", label: "ripple" },
+  { value: "spiral", icon: "🌀", label: "spiral" },
+  { value: "mandala", icon: "🔮", label: "mandala" },
+];
+
 export interface FractalParams {
   fractalType: FractalType;
   fractalAudioReactive: boolean;

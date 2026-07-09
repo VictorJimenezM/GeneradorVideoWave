@@ -80,6 +80,8 @@ Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
 | `fftLikePointsPerCircle` | wave.ts | `2600` (sample step divisor) |
 | `TITLE_PRESETS` | title.ts | 10 title style presets |
 | `bgPresets` | fondo.ts | 5 background color presets |
+| `INSTINCT_MODES` | instinct.ts | `{value, icon, label}[]` — water/organic/fragments/ifs |
+| `FRACTAL_TYPES` | fractals.ts | `{value, icon, label}[]` — ripple/spiral/mandala |
 | `formatBytes(n)` | AudioVisualizerG.tsx | B/KB/MB/GB formatting |
 | `clamp(n, min, max)` | fractals.ts | Number clamping |
 | `hexToRgba(hex, alpha)` | fractals.ts | Hex → `rgba(r,g,b,a)` |
@@ -134,13 +136,11 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 | 0 | — | **Panel IA Assistant** en grid de 2 columnas (ver detalle abajo) |
 | 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
-| 3 | **Onda** (collapsible) | **Mostrar onda** checkbox, **Forma** (radio, intensidad, grosor, brillo), **Color** (color picker + gradiente select side by side, conditional Color 1/2) |
-| 4 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove) |
-| 5 | **Fractal** (collapsible) | Activar checkbox, tipo (ripple/spiral/mandala), reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
-| 6 | **Instinto Inconsciente** (collapsible) | Activar checkbox, modo (water/organic/fragments/ifs), velocidad, intensidad, frecuencia, preview (80×80) + botones ▲/▼ reordenar capa |
-| 7 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
-| 8 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
-| 9 | **Exportar** (collapsible) | Resolución 720p/1080p/4K (grid 3 col) + aviso "Mantén la pestaña en primer plano" al lado del título (texto ámbar pequeño). Botón **Grabar y descargar** plano (fondo índigo sólido, `px-2 py-1 text-[11px]`, icono rojo), tamaño similar a Previsualizar/Detener |
+| 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove) |
+| 4 | **Fractal** (collapsible) | Stepper `‹🌊›` para tipo (ripple/spiral/mandala), checkbox reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
+| 5 | **Subconciencia + Onda** (collapsible, **bloque acoplado**) | Dos `CollapsibleSection` dentro de un `div.relative` con **un solo par ▲/▼** que mueve todo el bloque. Siempre juntos — Subconciencia (stepper `‹🌊›` + sliders velocidad/intensidad/frecuencia + preview 80×80) se renderiza primero y Onda (check + forma + color + partículas) encima. Partículas embebidas dentro de Onda. |
+| 6 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
+| 7 | **Exportar** (collapsible) | Resolución 720p/1080p/4K (grid 3 col) + aviso "Mantén la pestaña en primer plano" al lado del título (texto ámbar pequeño). Botón **Grabar y descargar** plano (fondo índigo sólido, `px-2 py-1 text-[11px]`, icono rojo), tamaño similar a Previsualizar/Detener |
 
 ### Panel IA Assistant (fila 0) — layout de 2 columnas
 
@@ -158,6 +158,35 @@ Renderizado por `src/components/IAAsistentPanel.tsx`. Cabecera en `grid grid-col
 - **Volumen** (fuera del grid, al final del panel): fila compacta con "Volumen" a la izquierda, barra `flex-1` en el centro y "%" a la derecha.
 - El modo (agresivo/sensible), BPM y compás se muestran debajo solo cuando la IA está activa y hay audio (igual que antes).
 - Botones Colapsar/Reset y el mini waveform se renderizan dentro del panel IA.
+
+### Layer order constraints
+
+- `layerOrder` (sin incluir `"fondo"`, que es siempre z-0) siempre mantiene `"instinct"` inmediatamente antes de `"onda"` — garantizado por `normalizeLayerOrder()`: si no están adyacentes, se recolocan juntos
+- `moveInstinctOndaBlock()` los mueve como **par inseparable**
+- `moveLayer()` redirige "instinct"/"onda" al block move
+- **Onda siempre encima de Subconciencia**: en la composición de grabación, instinct se dibuja primero y onda encima, evitando que la distorsión del canvas Instinct cubra la forma de onda
+- Orden por defecto: `["fractal", "instinct", "onda", "letras"]`
+- El bloque Instinct+Onda puede reordenarse arriba/abajo respecto a Fractal y Texto con los botones ▲/▼
+
+### Header controls por sección
+
+Cada `CollapsibleSection` puede tener 3 tipos de controles en su header (botón del título):
+
+| Control | Secciones que lo tienen | Detalle |
+|---------|------------------------|---------|
+| **ON/OFF toggle** | Fractal, SUB, Onda, Texto | Pill de `w-12 h-5` (48px), rojo ON / gris OFF, círculo blanco deslizante. Texto ON a `left-1`, OFF a `right-1`. Usa `e.stopPropagation()` para no colapsar la sección. Renderizado solo cuando existe el prop `enabled` + `onToggleEnabled`. |
+| **`headerCenter` stepper** | Fractal, SUB | Botones `‹`/`›` + icono del modo actual. `bg-fuchsia-900/40 rounded`, `text-sm px-3 py-0.5`. Siempre visibles (wrap-around infinito: al llegar al final vuelve al inicio y viceversa). Usan `e.stopPropagation()` para no colapsar. Solo icono en header; icono + nombre completo en el body. |
+| **▲/▼ reorder** | Fractal (▲+▼), SUB (▲), Onda (▼), Texto (▲+▼) | Botones `text-[10px] px-2.5 py-0.5`, `bg-slate-800/60 text-slate-400`. Se pasan via `titleButtons` a `CollapsibleSection`. Siempre visibles (no dependen de `allCollapsed`). Se renderizan entre el headerCenter/ON/OFF. |
+| **headerBg** | SUB, Onda | `bg-indigo-950/40` en ambos headers para marcar visualmente que son un bloque acoplado. Las demás secciones no tienen fondo en el header. |
+
+**Peculiaridades:**
+
+- **Solo las secciones que son capas del canvas** (Fractal, SUB, Onda, Texto) tienen ON/OFF y/o ▲/▼. Audio, Presets, Fondo y Exportar no tienen ninguno.
+- **SUB y Onda comparten el reordenamiento como bloque**: ▲ está en SUB, ▼ está en Onda. `moveInstinctOndaBlock()` mueve ambas como par inseparable. `normalizeLayerOrder()` garantiza que siempre estén adyacentes.
+- **Fractal y Texto** tienen ambos botones (▲+▼) en `titleButtons`, cada uno mueve su propia capa individualmente.
+- **headerBg** solo se usa en SUB y Onda (`bg-indigo-950/40`) para distinguir visualmente el bloque del resto.
+- **SUB ghost button**: SUB tiene un `▼` invisible (`text-transparent pointer-events-none`) antes de `▲` en `titleButtons` para equilibrar el ancho visual con Fractal (que tiene `▲▼` reales).
+- **Cuando `headerCenter` existe**, `titleButtons` se renderizan dentro del mismo wrapper flex, sin gap entre ellos (`justify-end` en `headerCenter` para que el stepper quede pegado a `titleButtons`).
 
 ## Preset system
 
@@ -182,12 +211,14 @@ Reset defaults: single `resetDefaults()` button restores all 30+ state variables
 - `fractalLayerMode` = `"overlay"`
 - `fractalOpacity` = `0.8`
 - `fractalAudioReactive` = `true`
+- `rippleThickness` = `4.0`
 - `particleColor` = `"#a78bfa"`
 - `particleOpacity` = `0.7`
-- `collapsedSections` starts with `"presets"`, `"wave"`, `"bg"`, `"fractal"`, `"instinct"`, `"particles"`, `"text"`, `"export"` (todo colapsado excepto Audio)
+- `collapsedSections` starts with `"presets"`, `"wave"`, `"bg"`, `"fractal"`, `"instinct"`, `"particles"`, `"text"`, `"export"` (todo colapsado excepto Audio, que empieza desplegado)
 - Volume = 0.7, Loop = true
 - `radiusRatio` = `0.60`, `intensity` = `0.80`, `strokeWidth` = `1.0`, `glowIntensity` = `0.40`
 - `waveColor` = `"#ffffff"`, `waveGradientMode` = `"solid"`, `gradColor1` = `"#6366f1"`, `gradColor2` = `"#a855f7"`
+- `instinctSpeed` = `0.5`, `instinctStrength` = `25`, `instinctFrequency` = `0.012`
 - `songTitle` = `""`, `titleColor` = `"#ffffff"`, `titlePreset` = `"bottom-center"`
 - `resolution` = `"1080p"`, `loop` = `true`, `isLoopingUI` = `true`
 
@@ -209,11 +240,11 @@ Five stacked `<canvas>` inside `relative w-full aspect-square`. CSS z-index hand
 
 2. **Fractal canvas** — `clearRect()` + `drawFractalBackground()` with `globalAlpha = fractalOpacity` (if enabled)
 
-3. **Instinct canvas** — pre-renders by accumulating layers below it in `layerOrder` into `tempCanvas`, then applies `drawInstinctFractal()` distortion
+3. **Instinct canvas** — pre-renders by accumulating layers below it in `layerOrder` into `tempCanvas`, then applies `drawInstinctFractal()` distortion. Solo captura capas por debajo en `layerOrder` (fondo, fractal); nunca onda — garantizando que la forma de onda no se distorsiona.
 
 4. **Onda canvas background**:
    - **Preview**: `clearRect()` (transparent — layers show through via CSS)
-   - **Recording**: `clearRect()` + `drawImage` of each layer in `layerOrder` (fondo→fractal→instinct→onda→letras)
+   - **Recording**: `clearRect()` + `drawImage` of each layer in `layerOrder` (fondo→fractal→instinct→onda→letras; onda siempre sobre instinct)
 
 5. **Waveform drawing** (`drawAdditionalPath`):
    - Mid-point interpolation between samples for smoother curves
@@ -260,6 +291,28 @@ Each has a static preview canvas (80×80) in the UI.
 | Spiral scale | `0.6 + amp * 0.8` | 1.4× |
 | Spiral dotSize | `0.5 + amp * 0.8` | 1.3× |
 | Mandala rotation | `0.5 + amp * 0.375` | 0.875× |
+
+## Stepper mode selector (‹ / ›)
+
+Fractal y SUB usan un stepper con dos flechas para cambiar entre modos/tipos directamente en el header.
+
+| Sección | Constante | Opciones |
+|---------|-----------|----------|
+| Fractal | `FRACTAL_TYPES` | 🌊 ripple · 🌀 spiral · 🔮 mandala |
+| SUB | `INSTINCT_MODES` | 🌊 water · 🧬 organic · 💎 fragment · 🌌 abyss |
+
+- **Wrap-around infinito**: al llegar al final, `›` vuelve al principio y viceversa.
+- **Siempre visibles**: no dependen de `allCollapsed`.
+- **Header**: solo el icono (`‹ 🌊 ›`).
+- **Body**: icono + nombre completo (`🌊 WATER`, `🌊 ONDAS (RIPPLE)`) con borde inferior, encima de los controles.
+- Posicionamiento: `justify-end` en el wrapper `flex-1` del `headerCenter` para que el stepper quede pegado a `titleButtons`.
+
+### Instinct internal coefficients
+
+| Modo | Coeficiente | Detalle |
+|------|-------------|---------|
+| **organic** | `instinctStrength * 3.5` | Multiplicador alto para más intensidad visual |
+| **ifs (abyss)** | speed × `0.1` / `0.075` / `0.05` | Coeficientes de velocidad internos reducidos a la mitad (era `0.2`/`0.15`/`0.1`) |
 
 ## IA Assistant (feat_ia_controller)
 
@@ -407,4 +460,5 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 
 - **v1.1.1** — Extracción de componentes visuales: CollapsibleSection, FileDropZone, 9 secciones del sidebar, y utilidades canvas/audio de AudioVisualizerG.tsx (~2562 → ~1894 líneas).
 - **v1.2.0 (sugerido)** — Rediseño del panel IA Assistant: cabecera en grid de 2 columnas (mini wave cuadrado en col 1; controles en col 2), botón Previsualizar con iconos play+ojo y hover-texto, Detener solo icono, Reset con `ConfirmModal`, Volumen en fila compacta; botón "Grabar y descargar" plano. Nuevo `src/components/ConfirmModal.tsx`.
+- **v1.3.0** — Stepper mode selector (`‹ / ›`) para Fractal y SUB con wrap-around infinito. Nueva prop `headerCenter` en `CollapsibleSection`. Reorder buttons siempre visibles (sin dependencia de `allCollapsed`). Ghost button `▼` invisible en SUB para equilibrio visual. Constantes exportadas `INSTINCT_MODES` y `FRACTAL_TYPES`. Reordenación de defaults: `instinctSpeed=0.5`, `instinctStrength=25`, `instinctFrequency=0.012`, `rippleThickness=4.0`. Coeficientes internos: organic `×3.5`, abyss speed `÷2`. Audio section starts expanded por defecto.
 

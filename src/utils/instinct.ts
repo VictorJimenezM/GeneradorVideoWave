@@ -2,6 +2,13 @@ import { clamp, hexToRgba, TWO_PI, GOLDEN_ANGLE } from "./fractals";
 
 export type InstinctMode = "water" | "organic" | "fragments" | "ifs";
 
+export const INSTINCT_MODES: { value: InstinctMode; icon: string; label: string }[] = [
+  { value: "water", icon: "🌊", label: "water" },
+  { value: "organic", icon: "🧬", label: "organic" },
+  { value: "fragments", icon: "💎", label: "fragment" },
+  { value: "ifs", icon: "🌌", label: "abyss" },
+];
+
 export interface InstinctParams {
   instinctMode: InstinctMode;
   instinctSpeed: number;
@@ -75,7 +82,7 @@ function drawInstinctOrganic(
 
   const now = performance.now() / 1000;
   const speed = p.instinctSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.5) : 1);
-  const attract = p.instinctStrength * 2 * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
+  const attract = p.instinctStrength * 3.5 * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
   const blobCount = Math.floor(4 + p.instinctFrequency * 60);
 
   const blobs: Array<{ x: number; y: number; r: number }> = [];
@@ -182,15 +189,15 @@ function drawInstinctIFS(
     ctx.restore();
 
     const ns = sc * 0.45;
-    const nr = rot + 0.3 + Math.sin(now * speed * 0.2 + lvl) * 0.2;
+    const nr = rot + 0.3 + Math.sin(now * speed * 0.1 + lvl) * 0.2;
     const s = spread * 0.5 * lvl;
-    const angle = now * speed * 0.15 + lvl;
+    const angle = now * speed * 0.075 + lvl;
 
     drawLevel(lvl - 1, tx + s * Math.cos(angle), ty + s * Math.sin(angle), ns, nr);
     drawLevel(lvl - 1, tx - s * Math.cos(angle + 1), ty - s * Math.sin(angle + 1), ns, -nr);
   }
 
-  drawLevel(levels, cx, cy, 1, now * speed * 0.1);
+  drawLevel(levels, cx, cy, 1, now * speed * 0.05);
 }
 
 export function drawInstinctFractal(

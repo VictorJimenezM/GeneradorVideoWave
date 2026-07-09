@@ -1,10 +1,11 @@
 import { type Ref } from "react";
 import CollapsibleSection from "../CollapsibleSection";
-import type { FractalType } from "../../utils/fractals";
+import { FRACTAL_TYPES, type FractalType } from "../../utils/fractals";
 
 interface Props {
   collapsed: boolean;
   onToggle: () => void;
+  allCollapsed?: boolean;
   fractalEnabled: boolean;
   setFractalEnabled: (v: boolean) => void;
   fractalType: FractalType;
@@ -59,6 +60,7 @@ interface Props {
 
 export default function FractalSection({
   collapsed, onToggle,
+  allCollapsed,
   fractalEnabled, setFractalEnabled,
   fractalType, setFractalType,
   fractalLayerMode,
@@ -86,6 +88,24 @@ export default function FractalSection({
   isDecoding, isRecording,
   moveLayer, layerOrder,
 }: Props) {
+  const currentFractalIdx = FRACTAL_TYPES.findIndex(t => t.value === fractalType);
+  const fractalHeaderCenter = (
+    <span className="flex items-center justify-between" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={() => setFractalType(FRACTAL_TYPES[(currentFractalIdx - 1 + FRACTAL_TYPES.length) % FRACTAL_TYPES.length].value)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Tipo anterior"
+      >‹</button>
+      <span className="text-xs leading-none text-slate-300">
+        {FRACTAL_TYPES[currentFractalIdx].icon}
+      </span>
+      <button type="button" onClick={() => setFractalType(FRACTAL_TYPES[(currentFractalIdx + 1) % FRACTAL_TYPES.length].value)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Siguiente tipo"
+      >›</button>
+    </span>
+  );
   const fractalTitleButtons = (
     <>
       <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("fractal", -1); }}
@@ -102,26 +122,24 @@ export default function FractalSection({
     <CollapsibleSection
       title="Fractal"
       titleButtons={fractalTitleButtons}
+      headerCenter={fractalHeaderCenter}
       enabled={fractalEnabled}
       onToggleEnabled={setFractalEnabled}
       collapsed={collapsed}
       onToggle={onToggle}
+      allCollapsed={allCollapsed}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(192,38,211,0.6)]" />}
       sectionBg="bg-fuchsia-950/30"
     >
-      <div className="space-y-1">
-        {fractalEnabled && (
-          <>
-            <select value={fractalType} onChange={(e) => setFractalType(e.target.value as FractalType)}
-              disabled={isDecoding || isRecording}
-              aria-label="Tipo de fractal"
-              className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-fuchsia-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-            >
-              <option value="ripple">Ondas (Ripple)</option>
-              <option value="spiral">Espiral (Phyllotaxis)</option>
-              <option value="mandala">Mandala</option>
-            </select>
-
+      <div className={`space-y-1 transition-all duration-200 ${fractalEnabled ? "" : "opacity-40 pointer-events-none select-none"}`}>
+            <div className="text-xs font-semibold tracking-wider text-fuchsia-400/80 uppercase flex items-center gap-1 pb-0.5 border-b border-slate-800/60 mb-1">
+              <span>{FRACTAL_TYPES[currentFractalIdx].icon}</span>
+              <span>
+                {fractalType === "ripple" ? "Ondas (Ripple)" :
+                 fractalType === "spiral" ? "Espiral (Phyllotaxis)" :
+                 "Mandala"}
+              </span>
+            </div>
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
               <input type="checkbox" checked={fractalAudioReactive} onChange={(e) => setFractalAudioReactive(e.target.checked)}
                 disabled={isDecoding || isRecording} aria-label="Fractal reactivo al audio"
@@ -140,11 +158,7 @@ export default function FractalSection({
               </label>
             )}
 
-            <div className="flex justify-center pt-0.5 pb-1">
-              <canvas ref={fractalPreviewRef} width={80} height={80}
-                className="w-[80px] h-[80px] rounded-lg border border-slate-700/50 bg-slate-950/80"
-                aria-label="Vista previa del fractal" />
-            </div>
+
 
             {fractalType === "ripple" && (
               <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
@@ -177,22 +191,7 @@ export default function FractalSection({
                   </div>
                   <input type="range" min={0.5} max={18} step={0.5} value={rippleThickness} onChange={(e) => setRippleThickness(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                 </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
-                    <div className="flex items-center gap-1">
-                      <input type="color" value={rippleColor1} onChange={(e) => setRippleColor1(e.target.value)} aria-label="Color de ripple 1" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[10px] font-mono text-slate-500">{rippleColor1}</span>
-                    </div>
-                  </label>
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
-                    <div className="flex items-center gap-1">
-                      <input type="color" value={rippleColor2} onChange={(e) => setRippleColor2(e.target.value)} aria-label="Color de ripple 2" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[10px] font-mono text-slate-500">{rippleColor2}</span>
-                    </div>
-                  </label>
-                </div>
+
               </div>
             )}
 
@@ -227,22 +226,7 @@ export default function FractalSection({
                   </div>
                   <input type="range" min={3} max={12} step={0.5} value={spiralDotSize} onChange={(e) => setSpiralDotSize(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                 </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
-                    <div className="flex items-center gap-1">
-                      <input type="color" value={spiralColor1} onChange={(e) => setSpiralColor1(e.target.value)} aria-label="Color de espiral 1" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[10px] font-mono text-slate-500">{spiralColor1}</span>
-                    </div>
-                  </label>
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
-                    <div className="flex items-center gap-1">
-                      <input type="color" value={spiralColor2} onChange={(e) => setSpiralColor2(e.target.value)} aria-label="Color de espiral 2" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[10px] font-mono text-slate-500">{spiralColor2}</span>
-                    </div>
-                  </label>
-                </div>
+
               </div>
             )}
 
@@ -277,26 +261,55 @@ export default function FractalSection({
                   </div>
                   <input type="range" min={0.5} max={20} step={1} value={mandalaLineWidth} onChange={(e) => setMandalaLineWidth(parseFloat(e.target.value))} disabled={isDecoding || isRecording} className="mt-0.5 w-full" />
                 </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
-                    <div className="flex items-center gap-1">
-                      <input type="color" value={mandalaColor1} onChange={(e) => setMandalaColor1(e.target.value)} aria-label="Color de mandala 1" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[10px] font-mono text-slate-500">{mandalaColor1}</span>
-                    </div>
-                  </label>
-                  <label className="block">
-                    <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
-                    <div className="flex items-center gap-1">
-                      <input type="color" value={mandalaColor2} onChange={(e) => setMandalaColor2(e.target.value)} aria-label="Color de mandala 2" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-                      <span className="text-[10px] font-mono text-slate-500">{mandalaColor2}</span>
-                    </div>
-                  </label>
-                </div>
+
               </div>
             )}
-          </>
-        )}
+
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-800/60 pt-1 mt-1">
+              <div className="flex items-center justify-center">
+                <canvas ref={fractalPreviewRef} width={80} height={80}
+                  className="w-[80px] h-[80px] rounded-lg border border-slate-700/50 bg-slate-950/80"
+                  aria-label="Vista previa del fractal" />
+              </div>
+              <div className="flex flex-col gap-1.5 justify-center">
+                <label className="block">
+                  <div className="text-xs font-medium text-slate-400 tracking-wide">Color 1</div>
+                  <div className="flex items-center gap-1">
+                    <input type="color"
+                      value={fractalType === "ripple" ? rippleColor1 : fractalType === "spiral" ? spiralColor1 : mandalaColor1}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (fractalType === "ripple") setRippleColor1(v);
+                        else if (fractalType === "spiral") setSpiralColor1(v);
+                        else setMandalaColor1(v);
+                      }}
+                      aria-label={`Color de ${fractalType === "ripple" ? "ripple" : fractalType === "spiral" ? "espiral" : "mandala"} 1`}
+                      className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {fractalType === "ripple" ? rippleColor1 : fractalType === "spiral" ? spiralColor1 : mandalaColor1}
+                    </span>
+                  </div>
+                </label>
+                <label className="block">
+                  <div className="text-xs font-medium text-slate-400 tracking-wide">Color 2</div>
+                  <div className="flex items-center gap-1">
+                    <input type="color"
+                      value={fractalType === "ripple" ? rippleColor2 : fractalType === "spiral" ? spiralColor2 : mandalaColor2}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (fractalType === "ripple") setRippleColor2(v);
+                        else if (fractalType === "spiral") setSpiralColor2(v);
+                        else setMandalaColor2(v);
+                      }}
+                      aria-label={`Color de ${fractalType === "ripple" ? "ripple" : fractalType === "spiral" ? "espiral" : "mandala"} 2`}
+                      className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {fractalType === "ripple" ? rippleColor2 : fractalType === "spiral" ? spiralColor2 : mandalaColor2}
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
       </div>
     </CollapsibleSection>
   );
