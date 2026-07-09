@@ -65,8 +65,7 @@ public/
 ├── fondo_muestra_1.png
 ├── fondo_muestra_2.png
 ├── fondo_muestra_3.png
-├── fondo_muestra_4.jpg
-└── fondo_muestra_5.png
+└── fondo_muestra_4.jpg
 
 Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
 ```
@@ -136,7 +135,7 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 | 0 | — | **Panel IA Assistant** en grid de 2 columnas (ver detalle abajo) |
 | 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
-| 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (5 preset select + file upload + remove) |
+| 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)) |
 | 4 | **Fractal** (collapsible) | Stepper `‹🌊›` para tipo (ripple/spiral/mandala), checkbox reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
 | 5 | **Subconciencia + Onda** (collapsible, **bloque acoplado**) | Dos `CollapsibleSection` dentro de un `div.relative` con **un solo par ▲/▼** que mueve todo el bloque. Siempre juntos — Subconciencia (stepper `‹🌊›` + sliders velocidad/intensidad/frecuencia + preview 80×80) se renderiza primero y Onda (check + forma + color + partículas) encima. Partículas embebidas dentro de Onda. |
 | 6 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
@@ -188,6 +187,21 @@ Cada `CollapsibleSection` puede tener 3 tipos de controles en su header (botón 
 - **SUB ghost button**: SUB tiene un `▼` invisible (`text-transparent pointer-events-none`) antes de `▲` en `titleButtons` para equilibrar el ancho visual con Fractal (que tiene `▲▼` reales).
 - **Cuando `headerCenter` existe**, `titleButtons` se renderizan dentro del mismo wrapper flex, sin gap entre ellos (`justify-end` en `headerCenter` para que el stepper quede pegado a `titleButtons`).
 
+### Gestor de muestras de imagen (pestaña Imagen)
+
+La pestaña **Imagen** del Fondo ya no usa un `<select>` ni un upload único: muestra una **cuadrícula 2×2 con 4 muestras** (`bgImagePresets`, estado en `AudioVisualizerG.tsx`). Funcionamiento:
+
+- **4 muestras** (`fondo_muestra_{1..4}`), definidas en `DEFAULT_BG_SAMPLES` y persistidas en `localStorage["bgImageSamples"]` (array de `{id, label, src}`; un `src` personalizado es un `dataURL`).
+- **Click en una tarjeta** → `handleSlotClick(id)`: selecciona la muestra (`handleBgImagePresetChange`) y abre el explorador de archivos para **reemplazarla**. Cada tarjeta muestra el overlay **"Click para cambiar imagen"** y conserva su etiqueta (`Muestra 1/2/3/4`).
+- Cada tarjeta tiene botones ↺ (restaurar a la imagen por defecto, solo si está personalizada) y ⟳ (reemplazar, redundante con el click pero conservado).
+- `replaceBgImagePreset(id, file)`: `FileReader` → `dataURL`, actualiza el `src` de la ranura, persiste en `localStorage` y redibuja si la ranura está activa.
+- `resetBgImagePreset(id)`: restaura el `src` por defecto de esa ranura y persiste.
+- **Carga por defecto**: al montar, `bgMode="image"` y `bgImagePreset="1"`; el `useEffect` inicial llama `loadSampleBgImage()` que carga `bgImagePresets[0].src` (respeta una Muestra 1 personalizada).
+- `loadSampleBgImage()` usa ahora `bgImagePresets[0].src` (antes hardcode `/fondo_muestra_1.png`), con fallback procedural si la imagen falla.
+- `resetDefaults()` vuelve a **Muestra 1 (imagen)**: restaura `bgImagePresets` a `DEFAULT_BG_SAMPLES`, limpia el override de `localStorage` y carga `DEFAULT_BG_SAMPLES[0].src`.
+- Se eliminaron los botones **"Sin imagen (Ninguna)"** y **"Remover"** de la UI.
+- La quinta muestra (`fondo_muestra_5.png`) se descartó por completo (archivo y referencias).
+
 ## Preset system
 
 | Type | Count | Storage |
@@ -196,7 +210,7 @@ Cada `CollapsibleSection` puede tener 3 tipos de controles en su header (botón 
 | Saved presets | N | `localStorage: quickPreset_{key}` + `quickPreset_saved` index |
 | BG color presets | 5 (dark, purple, cyan, emerald, warm) | Static `bgPresets` array |
 | Title presets | 10 (bottom-center, bottom-left, …, compact) | Static `TITLE_PRESETS` array |
-| BG image presets | 5 (`fondo_muestra_{1..5}`) | `/public/` files |
+| BG image presets | 4 (`fondo_muestra_{1..4}`) | `/public/` files (por defecto); personalizadas persistidas en `localStorage["bgImageSamples"]` como dataURL |
 
 Reset defaults: single `resetDefaults()` button restores all 30+ state variables.
 
@@ -204,7 +218,7 @@ Reset defaults: single `resetDefaults()` button restores all 30+ state variables
 
 - `showWave` = `true`
 - `showParticles` = `false`
-- `bgMode` = `"color"`
+- `bgMode` = `"image"` (Muestra 1 cargada por defecto al iniciar)
 - `bgColor` = `"#000000"`
 - `fractalEnabled` = `false`
 - `fractalType` = `"ripple"`
@@ -436,7 +450,9 @@ FFmpeg.wasm is loaded on mount from CDN (`@ffmpeg/ffmpeg@0.11.6` + `@ffmpeg/core
 | `drawFondoCanvas(ctx, canvas, bgColor, bgImage)` | fondo.ts — solid color or cover-fit bg image |
 | `drawInstinctFractal(ctx, canvas, params, amp, bgCanvas)` | instinct.ts — dispatcher to 4 instinct modes |
 | `drawInstinctPreview(ctx, w, h, params)` | instinct.ts — 80×80 instinct preview |
-| `loadSampleBgImage()` | Load first bg image preset (with procedural fallback) |
+| `loadSampleBgImage()` | Load first bg image preset (`bgImagePresets[0].src`, with procedural fallback) |
+| `replaceBgImagePreset(id, file)` | Replace a sample slot's image (dataURL → `localStorage["bgImageSamples"]`), redraws if active |
+| `resetBgImagePreset(id)` | Restore a sample slot to its default `src` and persist |
 
 ## `useAudioAnalyser` hook (not integrated)
 
@@ -461,4 +477,5 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - **v1.1.1** — Extracción de componentes visuales: CollapsibleSection, FileDropZone, 9 secciones del sidebar, y utilidades canvas/audio de AudioVisualizerG.tsx (~2562 → ~1894 líneas).
 - **v1.2.0 (sugerido)** — Rediseño del panel IA Assistant: cabecera en grid de 2 columnas (mini wave cuadrado en col 1; controles en col 2), botón Previsualizar con iconos play+ojo y hover-texto, Detener solo icono, Reset con `ConfirmModal`, Volumen en fila compacta; botón "Grabar y descargar" plano. Nuevo `src/components/ConfirmModal.tsx`.
 - **v1.3.0** — Stepper mode selector (`‹ / ›`) para Fractal y SUB con wrap-around infinito. Nueva prop `headerCenter` en `CollapsibleSection`. Reorder buttons siempre visibles (sin dependencia de `allCollapsed`). Ghost button `▼` invisible en SUB para equilibrio visual. Constantes exportadas `INSTINCT_MODES` y `FRACTAL_TYPES`. Reordenación de defaults: `instinctSpeed=0.5`, `instinctStrength=25`, `instinctFrequency=0.012`, `rippleThickness=4.0`. Coeficientes internos: organic `×3.5`, abyss speed `÷2`. Audio section starts expanded por defecto.
+- **v1.4.0** — Gestor de muestras de imagen de fondo: `bgImagePresets` pasa a estado dinámico de 4 muestras persistido en `localStorage["bgImageSamples"]` (reemplazo por ranura con dataURL + restauración). Cuadrícula 2×2 con overlay "Click para cambiar imagen" (click selecciona y reemplaza). Carga Muestra 1 por defecto al iniciar. Se eliminan los botones "Sin imagen (Ninguna)" y "Remover". Se descarta `fondo_muestra_5.png`. `resetDefaults()` vuelve a Muestra 1 (imagen).
 
