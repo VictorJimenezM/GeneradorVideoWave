@@ -14,12 +14,12 @@ export const TITLE_PRESETS: TitlePreset[] = [
   { id: "bottom-center", label: "Inferior centro", font: "Arial, sans-serif", weight: "bold", size: 0.035, align: "center", valign: "bottom", y: 0.93 },
   { id: "bottom-left", label: "Inferior izquierda", font: "Arial, sans-serif", weight: "bold", size: 0.03, align: "left", valign: "bottom", y: 0.93, x: 0.04 },
   { id: "bottom-right", label: "Inferior derecha", font: "Arial, sans-serif", weight: "bold", size: 0.03, align: "right", valign: "bottom", y: 0.93, x: 0.96 },
-  { id: "center-big", label: "Centro grande", font: "Georgia, serif", weight: "bold", size: 0.07, align: "center", valign: "middle", y: 0.5 },
+  { id: "center-big", label: "Centro grande", font: "Verdana, sans-serif", weight: "bold", size: 0.07, align: "center", valign: "middle", y: 0.5 },
   { id: "center-medium", label: "Centro medio", font: "Arial, sans-serif", weight: "bold", size: 0.045, align: "center", valign: "middle", y: 0.5 },
   { id: "top-center", label: "Superior centro", font: "Arial, sans-serif", weight: "bold", size: 0.03, align: "center", valign: "top", y: 0.06 },
   { id: "top-left", label: "Superior izquierda", font: "Arial, sans-serif", weight: "normal", size: 0.025, align: "left", valign: "top", y: 0.06, x: 0.04 },
   { id: "top-right", label: "Superior derecha", font: "Arial, sans-serif", weight: "normal", size: 0.025, align: "right", valign: "top", y: 0.06, x: 0.96 },
-  { id: "center-elegant", label: "Centro elegante", font: "Georgia, serif", weight: "normal", size: 0.05, align: "center", valign: "middle", y: 0.5 },
+  { id: "center-elegant", label: "Centro elegante", font: "Verdana, sans-serif", weight: "normal", size: 0.05, align: "center", valign: "middle", y: 0.5 },
   { id: "compact", label: "Compacto", font: "'Courier New', monospace", weight: "bold", size: 0.02, align: "center", valign: "bottom", y: 0.95 },
 ];
 
@@ -28,7 +28,7 @@ export type TitleFontGroup = "clasicas" | "extremas";
 export const TITLE_FONTS: { id: string; label: string; family: string; group: TitleFontGroup }[] = [
   { id: "arial", label: "Arial", family: "Arial, Helvetica, sans-serif", group: "clasicas" },
   { id: "times", label: "Times New Roman", family: "'Times New Roman', Times, serif", group: "clasicas" },
-  { id: "georgia", label: "Georgia", family: "Georgia, serif", group: "clasicas" },
+  { id: "verdana", label: "Verdana", family: "Verdana, sans-serif", group: "clasicas" },
   { id: "courier", label: "Courier New", family: "'Courier New', monospace", group: "clasicas" },
   { id: "pacifico", label: "Pacifico", family: "Pacifico, cursive", group: "extremas" },
   { id: "bungee", label: "Bungee", family: "Bungee, sans-serif", group: "extremas" },
@@ -71,8 +71,8 @@ function drawCurvedText(
   if (n === 0) return;
   const spread = curve * Math.PI * 0.6;
   const radius = sizePx * 6;
-  const centerY = cy - radius;
-  const startAngle = Math.PI / 2 - spread / 2;
+  const centerY = cy + radius;
+  const startAngle = -Math.PI / 2 - spread / 2;
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";

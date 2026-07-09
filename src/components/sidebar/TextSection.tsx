@@ -106,28 +106,30 @@ export default function TextSection({
           aria-label="Título de la canción"
           className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
         />
-        <div className="flex items-center gap-1.5">
-          <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} aria-label="Color de título" className="h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
-          <span className="text-[11px] font-mono text-slate-500">{titleColor}</span>
-        </div>
-
-        <div className="border-t border-slate-800/60 pt-1.5 mt-0.5">
-          <div className="text-[11px] font-semibold tracking-wider text-rose-400/60 uppercase pb-0.5">Serios</div>
+        <div className="flex items-stretch gap-1.5">
+          <div className="flex flex-1 items-center gap-1.5">
+            <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} aria-label="Color de título" className="h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+            <span className="text-[11px] font-mono text-slate-500">{titleColor}</span>
+          </div>
           <select value={titleFont} onChange={(e) => setTitleFont(e.target.value)}
             aria-label="Fuente del título"
-            className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+            className="flex-1 rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
           >
-            <optgroup label="Clásicas">
+            <optgroup label="Serios">
               {classicFonts.map((f) => (
                 <option key={f.id} value={f.id}>{f.label}</option>
               ))}
             </optgroup>
-            <optgroup label="Extremas">
+            <optgroup label="Creativos">
               {extremeFonts.map((f) => (
                 <option key={f.id} value={f.id}>{f.label}</option>
               ))}
             </optgroup>
           </select>
+        </div>
+
+        <div className="border-t border-slate-800/60 pt-1.5 mt-0.5">
+          <div className="text-[11px] font-semibold tracking-wider text-rose-400/60 uppercase pb-0.5">Serios</div>
           <div className="flex gap-1 pt-1">
             <button type="button" onClick={() => setTitleWeight(titleWeight === "bold" ? "normal" : "bold")}
               aria-pressed={titleWeight === "bold"}
@@ -172,7 +174,7 @@ export default function TextSection({
               <span>Texto en curva</span>
               <span className="tabular-nums text-slate-300">{titleCurve.toFixed(2)}</span>
             </div>
-            <input type="range" min={-1} max={1} step={0.05} value={titleCurve} onChange={(e) => setTitleCurve(parseFloat(e.target.value))} className="mt-0.5 w-full" />
+            <input type="range" min={0} max={1} step={0.05} value={titleCurve} onChange={(e) => setTitleCurve(parseFloat(e.target.value))} className="mt-0.5 w-full" />
           </label>
           <div className="flex items-center gap-1.5 pt-1">
             <span className="text-[10px] uppercase tracking-wider text-slate-500 w-14">Movimiento</span>
