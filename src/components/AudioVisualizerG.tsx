@@ -22,7 +22,7 @@ import { drawFractalBackground as drawFractalBg, drawFractalPreview as drawFract
 import { INSTINCT_MODES, drawInstinctFractal, drawInstinctPreview } from "../utils/instinct";
 import { fftLikePointsPerCircle, getPointXY, drawAdditionalPath, drawTip, drawStaticWaveform, type Point, type WaveStyle } from "../utils/wave";
 import { emitParticles, updateAndDrawParticles } from "../utils/particles";
-import { TITLE_PRESETS, drawTitle, resolveTitleFamily, type TitleStyle } from "../utils/title";
+import { drawTitle, resolveTitleFamily, type TitleStyle } from "../utils/title";
 import { bgPresets, drawFondoCanvas, getBgFilterCss, type BgImageFilter } from "../utils/fondo";
 import { syncAllCanvasSizes as syncSizes, setCanvasVideoSize as setVideoSize, clearCanvasSolid as clearCanvas } from "../utils/canvas";
 import { buildPrecomputedGeometry as buildGeo, getCurrentAmplitude as getAmp } from "../utils/audio";
@@ -1642,14 +1642,6 @@ export default function AudioVisualizer() {
     setWavePresetIdx(WAVE_PRESETS.indexOf(p));
   }, []);
 
-  const applyTitlePreset = useCallback((id: string) => {
-    const p = TITLE_PRESETS.find((x) => x.id === id) || TITLE_PRESETS[0];
-    setTitleAlign(p.align as "left" | "center" | "right");
-    setTitleValign(p.valign as "top" | "middle" | "bottom");
-    setTitleSizeScale(1);
-    setTitlePreset(id);
-  }, []);
-
   const applyQuickPreset = useCallback((key: string) => {
     const expandBg = () => {
       setCollapsedSections(new Set(SECTION_KEYS.filter((k) => k !== "bg")));
@@ -2089,7 +2081,6 @@ export default function AudioVisualizer() {
                       setTitleMotion={setTitleMotion}
                       titleMotionAmount={titleMotionAmount}
                       setTitleMotionAmount={setTitleMotionAmount}
-                      applyTitlePreset={applyTitlePreset}
                       moveLayer={moveLayer}
                       layerOrder={layerOrder}
                     />

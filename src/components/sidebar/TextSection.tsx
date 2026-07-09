@@ -1,5 +1,5 @@
 import CollapsibleSection from "../CollapsibleSection";
-import { TITLE_PRESETS, TITLE_FONTS, type TitleMotion } from "../../utils/title";
+import { TITLE_FONTS, type TitleMotion } from "../../utils/title";
 
 interface Props {
   collapsed: boolean;
@@ -31,7 +31,6 @@ interface Props {
   setTitleMotion: (v: TitleMotion) => void;
   titleMotionAmount: number;
   setTitleMotionAmount: (v: number) => void;
-  applyTitlePreset: (id: string) => void;
   moveLayer: (layer: string, dir: number) => void;
   layerOrder: string[];
 }
@@ -70,7 +69,6 @@ export default function TextSection({
   titleCurve, setTitleCurve,
   titleMotion, setTitleMotion,
   titleMotionAmount, setTitleMotionAmount,
-  applyTitlePreset,
   moveLayer, layerOrder,
 }: Props) {
   const classicFonts = TITLE_FONTS.filter((f) => f.group === "clasicas");
@@ -108,14 +106,6 @@ export default function TextSection({
           aria-label="Título de la canción"
           className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
         />
-        <select value={titlePreset} onChange={(e) => applyTitlePreset(e.target.value)}
-          aria-label="Posición del título"
-          className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-        >
-          {TITLE_PRESETS.map((p) => (
-            <option key={p.id} value={p.id}>{p.label}</option>
-          ))}
-        </select>
         <div className="flex items-center gap-1.5">
           <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} aria-label="Color de título" className="h-7 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
           <span className="text-[11px] font-mono text-slate-500">{titleColor}</span>

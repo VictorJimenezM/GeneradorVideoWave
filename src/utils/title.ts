@@ -137,8 +137,12 @@ export function drawTitle(
   ctx.textAlign = style.align;
   ctx.textBaseline = style.valign;
 
-  const x = preset.x !== undefined ? canvas.width * preset.x : canvas.width / 2;
-  const y = canvas.height * preset.y + yOffset;
+  const x = style.align === "left" ? canvas.width * 0.04
+          : style.align === "right" ? canvas.width * 0.96
+          : canvas.width / 2;
+  const y = style.valign === "top" ? canvas.height * 0.06
+          : style.valign === "bottom" ? canvas.height * 0.93
+          : canvas.height / 2;
 
   if (style.curve === 0) {
     if (rot !== 0) {
