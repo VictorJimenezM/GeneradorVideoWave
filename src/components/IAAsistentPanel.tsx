@@ -1,5 +1,6 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import type { IAIAssistantMode } from "../hooks/useIAAsistent";
+import ConfirmModal from "./ConfirmModal";
 
 interface Props {
   isActive: boolean;
@@ -50,32 +51,104 @@ export default function IAAsistentPanel({
   onCollapseAll,
   onResetDefaults,
 }: Props) {
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   return (
     <div className="rounded-lg border border-violet-700/40 bg-violet-950/20 p-2 space-y-1.5">
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={isActive}
-          onChange={(e) => setIsActive(e.target.checked)}
-          disabled={!audioLoaded}
-          className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-violet-500 focus:ring-2 focus:ring-violet-500/50 focus:ring-offset-1 focus:ring-offset-slate-950"
-        />
-        <span className="text-xs font-semibold tracking-wider text-violet-300 uppercase">
-          IA Assistant
-        </span>
-        {onResetDefaults && (
-          <button type="button" onClick={onResetDefaults}
-            className="ml-auto rounded px-1.5 py-0.5 text-[11px] text-slate-600 hover:text-slate-300 hover:bg-slate-800/40 transition-all"
-            title="Restablecer valores de fábrica"
-          >
-            ↺
-          </button>
-        )}
-      </label>
+      <div className="grid grid-cols-2 gap-2">
+        {/* COLUMNA 1 */}
+        <div className="flex flex-col gap-1.5">
+          {waveformReady ? (
+            <canvas ref={previewCanvasRef as any} className="w-full aspect-square rounded-lg border border-slate-800/60 bg-slate-950/40" />
+          ) : (
+            <div className="flex w-full aspect-square items-center justify-center rounded-lg border border-slate-800/60 bg-slate-950/40 px-2 text-center text-[10px] text-slate-500">
+              Carga un audio primero
+            </div>
+          )}
+        </div>
 
-      {!audioLoaded && (
-        <p className="text-[10px] text-slate-500">Carga un audio primero</p>
-      )}
+        {/* COLUMNA 2 */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
+            <label className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded px-1.5 py-1 text-xs text-slate-500 transition-all duration-200 hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                disabled={!audioLoaded}
+                className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-violet-500 accent-violet-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+              />
+              <span>IA Assistant</span>
+            </label>
+            <label className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded px-1.5 py-1 text-xs text-slate-500 transition-all duration-200 hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950">
+              <input type="checkbox" checked={isLoopingUI} onChange={(e) => { const v = e.target.checked; setIsLoopingUI(v); if (audioRef.current) audioRef.current.loop = v; }}
+                disabled={isRecording} aria-label="Activar loop de preview"
+                className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+              />
+              Loop preview
+            </label>
+            <div className="grid grid-cols-2 gap-1">
+              <button type="button" onClick={onCollapseAll}
+                aria-label="Colapsar todos los menús"
+                className="flex w-full items-center justify-center gap-1 rounded px-1.5 py-1 text-xs text-slate-500 transition-all duration-200 hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                </svg>
+                Colap.
+              </button>
+              {onResetDefaults && (
+              <button type="button" onClick={() => setShowResetConfirm(true)}
+                className="flex w-full items-center justify-center gap-1 rounded px-1.5 py-1 text-xs text-slate-500 transition-all duration-200 hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                title="Restablecer valores de fábrica"
+              >
+                ↺ Reset
+              </button>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            <button type="button" onClick={handlePreview}
+              disabled={isDecoding || isRecording || isPreviewing || !audioUrl || !waveformReady}
+              aria-label="Previsualizar audio"
+              aria-busy={isDecoding}
+              className="group w-full rounded-lg bg-emerald-500 px-2 py-1 text-[11px] font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              {isDecoding ? (
+                <span className="flex items-center justify-center">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </span>
+              ) : (
+                <span className="flex flex-col items-center gap-0.5">
+                  <span className="flex items-center gap-1">
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </span>
+                  <span className="hidden group-hover:block text-[10px] leading-none">Previsualizar</span>
+                </span>
+              )}
+            </button>
+            <button type="button" onClick={() => void stopAll()}
+              disabled={(!isRecording && !isPreviewing) || isDecoding}
+              aria-label="Detener preview o grabación"
+              className="w-full rounded-lg bg-slate-950 px-2 py-1 transition-all duration-200 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              <span className="flex items-center justify-center">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {isActive && audioLoaded && (
         <>
@@ -119,78 +192,27 @@ export default function IAAsistentPanel({
         </>
       )}
 
-      {waveformReady && (
-        <div>
-          <canvas ref={previewCanvasRef as any} className="w-full h-14 rounded-lg border border-slate-800/60 bg-slate-950/40" />
-        </div>
-      )}
-
-      <label className="block">
-        <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
-          <span>Volumen</span>
-          <span className="tabular-nums text-slate-300">{Math.round(volume * 100)}%</span>
-        </div>
+      <label className="flex items-center gap-2 text-xs font-medium text-slate-400 tracking-wide">
+        <span className="whitespace-nowrap">Volumen</span>
         <input type="range" min={0} max={1} step={0.05} value={volume}
           onChange={(e) => { const v = parseFloat(e.target.value); setVolume(v); if (audioRef.current) audioRef.current.volume = v; }}
           aria-label="Volumen de preview"
-          className="mt-0.5 w-full" />
+          className="flex-1" />
+        <span className="tabular-nums text-slate-300 whitespace-nowrap">{Math.round(volume * 100)}%</span>
       </label>
 
-      <div className="grid grid-cols-2 gap-1">
-        <button type="button" onClick={handlePreview}
-          disabled={isDecoding || isRecording || isPreviewing || !audioUrl || !waveformReady}
-          aria-label="Previsualizar audio"
-          className="w-full rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-        >
-          {isDecoding ? (
-            <span className="inline-flex items-center gap-1.5">
-              <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Decodificando...
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5">
-              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Previsualizar
-            </span>
-          )}
-        </button>
-        <button type="button" onClick={() => void stopAll()}
-          disabled={(!isRecording && !isPreviewing) || isDecoding}
-          aria-label="Detener preview o grabación"
-          className="w-full rounded-lg bg-slate-800/80 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all duration-200 hover:bg-slate-700/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
-            Detener
-          </span>
-        </button>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-          <input type="checkbox" checked={isLoopingUI} onChange={(e) => { const v = e.target.checked; setIsLoopingUI(v); if (audioRef.current) audioRef.current.loop = v; }}
-            disabled={isRecording} aria-label="Activar loop de preview"
-            className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-          />
-          Loop preview
-        </label>
-        <button type="button" onClick={onCollapseAll}
-          aria-label="Colapsar todos los menús"
-          className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-slate-500 transition-all duration-200 hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-        >
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-          </svg>
-          Colapsar
-        </button>
-      </div>
+      <ConfirmModal
+        open={showResetConfirm}
+        title="Restablecer valores"
+        message="¿Seguro que deseas restablecer todos los valores a fábrica?"
+        confirmLabel="Restablecer"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          onResetDefaults?.();
+          setShowResetConfirm(false);
+        }}
+        onCancel={() => setShowResetConfirm(false)}
+      />
     </div>
   );
 }

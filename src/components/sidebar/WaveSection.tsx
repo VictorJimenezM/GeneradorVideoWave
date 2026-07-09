@@ -21,6 +21,12 @@ interface Props {
   setGradColor1: (v: string) => void;
   gradColor2: string;
   setGradColor2: (v: string) => void;
+  showParticles: boolean;
+  setShowParticles: (v: boolean) => void;
+  particleColor: string;
+  setParticleColor: (v: string) => void;
+  particleOpacity: number;
+  setParticleOpacity: (v: number) => void;
   isDecoding: boolean;
   isRecording: boolean;
   moveLayer: (layer: string, dir: number) => void;
@@ -38,33 +44,35 @@ export default function WaveSection({
   waveGradientMode, setWaveGradientMode,
   gradColor1, setGradColor1,
   gradColor2, setGradColor2,
+  showParticles, setShowParticles,
+  particleColor, setParticleColor,
+  particleOpacity, setParticleOpacity,
   isDecoding, isRecording,
   moveLayer, layerOrder,
 }: Props) {
+  const ondaTitleButtons = (
+    <>
+      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("onda", -1); }}
+        disabled={layerOrder.indexOf("onda") <= 0}
+        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Subir capa">▲</button>
+      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("onda", 1); }}
+        disabled={layerOrder.indexOf("onda") >= layerOrder.length - 1}
+        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Bajar capa">▼</button>
+    </>
+  );
   return (
     <CollapsibleSection
       title="Onda"
+      titleButtons={ondaTitleButtons}
+      enabled={showWave}
+      onToggleEnabled={setShowWave}
       collapsed={collapsed}
       onToggle={onToggle}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.6)]" />}
       sectionBg="bg-cyan-950/30"
     >
-      <div className="flex items-center justify-between pb-1.5">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={showWave} onChange={(e) => setShowWave(e.target.checked)} disabled={isDecoding || isRecording} className="accent-cyan-500 w-3.5 h-3.5 rounded border-slate-700 bg-slate-900" />
-          <span className="text-xs font-medium text-slate-300 tracking-wide select-none">Mostrar onda</span>
-        </label>
-        <div className="flex gap-0.5">
-          <button type="button" onClick={() => moveLayer("onda", -1)}
-            disabled={layerOrder.indexOf("onda") <= 0}
-            className="px-1.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-            aria-label="Subir capa">▲</button>
-          <button type="button" onClick={() => moveLayer("onda", 1)}
-            disabled={layerOrder.indexOf("onda") >= layerOrder.length - 1}
-            className="px-1.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-            aria-label="Bajar capa">▼</button>
-        </div>
-      </div>
       <div className="text-[11px] font-semibold tracking-wider text-cyan-400/50 uppercase pb-0.5">Forma</div>
       <label className="block">
         <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
@@ -135,6 +143,32 @@ export default function WaveSection({
               </div>
             </label>
           </div>
+        )}
+      </div>
+
+      <div className="border-t border-slate-800/60 pt-1.5 mt-1.5">
+        <div className="text-[11px] font-semibold tracking-wider text-cyan-400/50 uppercase pb-0.5">Partículas</div>
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
+          <input type="checkbox" checked={showParticles} onChange={(e) => setShowParticles(e.target.checked)} disabled={isDecoding || isRecording} aria-label="Mostrar partículas" className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-indigo-500 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+          Activar partículas
+        </label>
+        {showParticles && (
+          <>
+            <label className="block pt-1">
+              <div className="text-xs font-medium text-slate-400 tracking-wide">Color</div>
+              <div className="flex items-center gap-1.5">
+                <input type="color" value={particleColor} onChange={(e) => setParticleColor(e.target.value)} aria-label="Color de partículas" className="mt-0.5 h-6 flex-1 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950" />
+                <span className="text-[11px] font-mono text-slate-500">{particleColor}</span>
+              </div>
+            </label>
+            <label className="block pt-1">
+              <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-400 tracking-wide">
+                <span>Opacidad</span>
+                <span className="tabular-nums text-slate-300">{particleOpacity.toFixed(2)}</span>
+              </div>
+              <input type="range" min={0} max={1} step={0.05} value={particleOpacity} onChange={(e) => setParticleOpacity(parseFloat(e.target.value))} className="mt-0.5 w-full" />
+            </label>
+          </>
         )}
       </div>
     </CollapsibleSection>

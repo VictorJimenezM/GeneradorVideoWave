@@ -21,29 +21,19 @@ function drawInstinctWater(
   if (!bgCanvas) return;
   ctx.drawImage(bgCanvas, 0, 0);
 
-  const scale = 0.2;
-  const sw = Math.max(2, Math.floor(canvas.width * scale));
-  const sh = Math.max(2, Math.floor(canvas.height * scale));
-
-  const offscreen = document.createElement("canvas");
-  offscreen.width = sw;
-  offscreen.height = sh;
-  const offCtx = offscreen.getContext("2d")!;
-  offCtx.imageSmoothingEnabled = false;
-  offCtx.drawImage(canvas, 0, 0, sw, sh);
-
-  const imageData = offCtx.getImageData(0, 0, sw, sh);
+  const w = canvas.width, h = canvas.height;
+  const imageData = ctx.getImageData(0, 0, w, h);
   const data = imageData.data;
   const output = new Uint8ClampedArray(data.length);
 
   const now = performance.now() / 1000;
   const speed = p.instinctSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.5) : 1);
-  const strength = p.instinctStrength * scale * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
+  const strength = p.instinctStrength * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
   const freq = p.instinctFrequency;
 
-  for (let y = 0; y < sh; y++) {
-    const rowOff = y * sw;
-    for (let x = 0; x < sw; x++) {
+  for (let y = 0; y < h; y++) {
+    const rowOff = y * w;
+    for (let x = 0; x < w; x++) {
       const dx = Math.sin(y * freq + now * speed) * strength
         + Math.cos(x * freq * 0.5 + now * speed * 0.7) * strength * 0.6
         + Math.sin((x + y) * freq * 0.3 + now * speed * 0.4) * strength * 0.4;
@@ -51,10 +41,10 @@ function drawInstinctWater(
         + Math.sin(y * freq * 0.6 + now * speed * 0.5) * strength * 0.6
         + Math.cos((x - y) * freq * 0.3 + now * speed * 1.1) * strength * 0.4;
 
-      const srcX = clamp(Math.round(x + dx), 0, sw - 1);
-      const srcY = clamp(Math.round(y + dy), 0, sh - 1);
+      const srcX = clamp(Math.round(x + dx), 0, w - 1);
+      const srcY = clamp(Math.round(y + dy), 0, h - 1);
 
-      const srcIdx = (srcY * sw + srcX) * 4;
+      const srcIdx = (srcY * w + srcX) * 4;
       const dstIdx = (rowOff + x) * 4;
 
       output[dstIdx] = data[srcIdx];
@@ -64,10 +54,8 @@ function drawInstinctWater(
     }
   }
 
-  offCtx.putImageData(new ImageData(output, sw, sh), 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, w, h);
+  ctx.putImageData(new ImageData(output, w, h), 0, 0);
 }
 
 function drawInstinctOrganic(
@@ -80,39 +68,29 @@ function drawInstinctOrganic(
   if (!bgCanvas) return;
   ctx.drawImage(bgCanvas, 0, 0);
 
-  const scale = 0.2;
-  const sw = Math.max(2, Math.floor(canvas.width * scale));
-  const sh = Math.max(2, Math.floor(canvas.height * scale));
-
-  const offscreen = document.createElement("canvas");
-  offscreen.width = sw;
-  offscreen.height = sh;
-  const offCtx = offscreen.getContext("2d")!;
-  offCtx.imageSmoothingEnabled = false;
-  offCtx.drawImage(canvas, 0, 0, sw, sh);
-
-  const imageData = offCtx.getImageData(0, 0, sw, sh);
+  const w = canvas.width, h = canvas.height;
+  const imageData = ctx.getImageData(0, 0, w, h);
   const data = imageData.data;
   const output = new Uint8ClampedArray(data.length);
 
   const now = performance.now() / 1000;
   const speed = p.instinctSpeed * (p.fractalAudioReactive ? (0.5 + amp * 0.5) : 1);
-  const attract = p.instinctStrength * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
+  const attract = p.instinctStrength * 2 * (p.fractalAudioReactive ? (0.3 + amp * 0.7) : 1);
   const blobCount = Math.floor(4 + p.instinctFrequency * 60);
 
   const blobs: Array<{ x: number; y: number; r: number }> = [];
   for (let i = 0; i < blobCount; i++) {
     const phase = i * GOLDEN_ANGLE + now * speed * 0.3;
     blobs.push({
-      x: sw * (0.5 + 0.45 * Math.sin(phase * 0.7 + i * 0.5)),
-      y: sh * (0.5 + 0.45 * Math.cos(phase * 0.5 + i * 0.7)),
+      x: w * (0.5 + 0.45 * Math.sin(phase * 0.7 + i * 0.5)),
+      y: h * (0.5 + 0.45 * Math.cos(phase * 0.5 + i * 0.7)),
       r: attract * (0.3 + 0.7 * Math.abs(Math.sin(phase * 0.2 + i))),
     });
   }
 
-  for (let y = 0; y < sh; y++) {
-    const rowOff = y * sw;
-    for (let x = 0; x < sw; x++) {
+  for (let y = 0; y < h; y++) {
+    const rowOff = y * w;
+    for (let x = 0; x < w; x++) {
       let dx = 0, dy = 0;
       for (const b of blobs) {
         const rx = b.x - x;
@@ -125,10 +103,10 @@ function drawInstinctOrganic(
         }
       }
 
-      const srcX = clamp(Math.round(x + dx), 0, sw - 1);
-      const srcY = clamp(Math.round(y + dy), 0, sh - 1);
+      const srcX = clamp(Math.round(x + dx), 0, w - 1);
+      const srcY = clamp(Math.round(y + dy), 0, h - 1);
 
-      const srcIdx = (srcY * sw + srcX) * 4;
+      const srcIdx = (srcY * w + srcX) * 4;
       const dstIdx = (rowOff + x) * 4;
 
       output[dstIdx] = data[srcIdx];
@@ -138,10 +116,8 @@ function drawInstinctOrganic(
     }
   }
 
-  offCtx.putImageData(new ImageData(output, sw, sh), 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, w, h);
+  ctx.putImageData(new ImageData(output, w, h), 0, 0);
 }
 
 function drawInstinctFragments(
@@ -199,6 +175,9 @@ function drawInstinctIFS(
     ctx.rotate(rot);
     ctx.scale(sc, sc);
     ctx.translate(-cx, -cy);
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(cx, cy) * 0.95, 0, TWO_PI);
+    ctx.clip();
     ctx.drawImage(bgCanvas!, 0, 0);
     ctx.restore();
 

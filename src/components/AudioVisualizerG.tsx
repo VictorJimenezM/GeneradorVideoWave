@@ -13,7 +13,7 @@ import WaveSection from "./sidebar/WaveSection";
 import BgSection from "./sidebar/BgSection";
 import FractalSection from "./sidebar/FractalSection";
 import InstinctSection from "./sidebar/InstinctSection";
-import ParticlesSection from "./sidebar/ParticlesSection";
+
 import TextSection from "./sidebar/TextSection";
 import ExportSection from "./sidebar/ExportSection";
 import type { FractalType, FractalParams } from "../utils/fractals";
@@ -183,20 +183,14 @@ export default function AudioVisualizer() {
 
   // Collapsible sections (Fondo and Partículas start collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(["presets", "wave", "bg", "fractal", "instinct", "particles", "text", "export"])
+    () => new Set(["presets", "wave", "bg", "fractal", "instinct", "text"])
   );
-  const exportSectionRef = useRef<HTMLDivElement>(null);
   const toggleSection = useCallback((name: string) => {
     setCollapsedSections((prev) => {
       const wasCollapsed = prev.has(name);
       const next = new Set(prev);
       if (wasCollapsed) next.delete(name);
       else next.add(name);
-      if (name === "export" && wasCollapsed) {
-        setTimeout(() => {
-          exportSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }, 50);
-      }
       return next;
     });
   }, []);
@@ -289,6 +283,14 @@ export default function AudioVisualizer() {
       return next;
     });
   }, []);
+
+  const layerZIndex = useMemo(() => {
+    const map: Record<string, number> = { fondo: 0 };
+    layerOrder.forEach((name, idx) => {
+      map[name] = idx + 1;
+    });
+    return map;
+  }, [layerOrder]);
 
   // --- WAVEFORM PREVIEW ---
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1626,7 +1628,7 @@ export default function AudioVisualizer() {
   return (
     <section className="glass glass-hover animate-fade-in overflow-hidden p-4">
       <div className="flex flex-col gap-4 md:flex-row">
-        <aside className="w-full md:w-72 sidebar-surface">
+        <aside className="w-full md:w-72 sidebar-surface flex flex-col">
             <IAAsistentPanel
               isActive={isIAAsistentActive}
               setIsActive={setIsIAAsistentActive}
@@ -1648,10 +1650,10 @@ export default function AudioVisualizer() {
               setIsLoopingUI={setIsLoopingUI}
               audioUrl={audioUrl}
               audioRef={audioRef}
-              onCollapseAll={() => setCollapsedSections(new Set(["audio", "presets", "wave", "bg", "fractal", "instinct", "particles", "text", "export"]))}
+              onCollapseAll={() => setCollapsedSections(new Set(["audio", "presets", "wave", "bg", "fractal", "instinct", "particles", "text"]))}
               onResetDefaults={resetDefaults}
             />
-          <div className="space-y-2 pr-1 overflow-y-auto max-h-[calc(100vh-16rem)]">
+          <div className="space-y-2 pr-1 overflow-y-auto flex-1 min-h-0">
             <AudioSection
               collapsed={collapsedSections.has("audio")}
               onToggle={() => toggleSection("audio")}
@@ -1674,33 +1676,6 @@ export default function AudioVisualizer() {
               saveCurrentToActivePreset={saveCurrentToActivePreset}
             />
 
-            <WaveSection
-              collapsed={collapsedSections.has("wave")}
-              onToggle={() => toggleSection("wave")}
-              showWave={showWave}
-              setShowWave={setShowWave}
-              radiusRatio={radiusRatio}
-              setRadiusRatio={setRadiusRatio}
-              intensity={intensity}
-              setIntensity={setIntensity}
-              strokeWidth={strokeWidth}
-              setStrokeWidth={setStrokeWidth}
-              glowIntensity={glowIntensity}
-              setGlowIntensity={setGlowIntensity}
-              waveColor={waveColor}
-              setWaveColor={setWaveColor}
-              waveGradientMode={waveGradientMode}
-              setWaveGradientMode={setWaveGradientMode}
-              gradColor1={gradColor1}
-              setGradColor1={setGradColor1}
-              gradColor2={gradColor2}
-              setGradColor2={setGradColor2}
-              isDecoding={isDecoding}
-              isRecording={isRecording}
-              moveLayer={moveLayer}
-              layerOrder={layerOrder}
-            />
-
             <BgSection
               collapsed={collapsedSections.has("bg")}
               onToggle={() => toggleSection("bg")}
@@ -1721,106 +1696,141 @@ export default function AudioVisualizer() {
               isPreviewing={isPreviewing}
             />
 
-            <FractalSection
-              collapsed={collapsedSections.has("fractal")}
-              onToggle={() => toggleSection("fractal")}
-              fractalEnabled={fractalEnabled}
-              setFractalEnabled={setFractalEnabled}
-              fractalType={fractalType}
-              setFractalType={setFractalType}
-              fractalLayerMode={fractalLayerMode}
-              fractalOpacity={fractalOpacity}
-              setFractalOpacity={setFractalOpacity}
-              fractalAudioReactive={fractalAudioReactive}
-              setFractalAudioReactive={setFractalAudioReactive}
-              rippleRingCount={rippleRingCount}
-              setRippleRingCount={setRippleRingCount}
-              rippleSpeed={rippleSpeed}
-              setRippleSpeed={setRippleSpeed}
-              rippleAmplitude={rippleAmplitude}
-              setRippleAmplitude={setRippleAmplitude}
-              rippleThickness={rippleThickness}
-              setRippleThickness={setRippleThickness}
-              rippleColor1={rippleColor1}
-              setRippleColor1={setRippleColor1}
-              rippleColor2={rippleColor2}
-              setRippleColor2={setRippleColor2}
-              spiralDensity={spiralDensity}
-              setSpiralDensity={setSpiralDensity}
-              spiralRotationSpeed={spiralRotationSpeed}
-              setSpiralRotationSpeed={setSpiralRotationSpeed}
-              spiralTightness={spiralTightness}
-              setSpiralTightness={setSpiralTightness}
-              spiralDotSize={spiralDotSize}
-              setSpiralDotSize={setSpiralDotSize}
-              spiralColor1={spiralColor1}
-              setSpiralColor1={setSpiralColor1}
-              spiralColor2={spiralColor2}
-              setSpiralColor2={setSpiralColor2}
-              mandalaSegments={mandalaSegments}
-              setMandalaSegments={setMandalaSegments}
-              mandalaRotationSpeed={mandalaRotationSpeed}
-              setMandalaRotationSpeed={setMandalaRotationSpeed}
-              mandalaComplexity={mandalaComplexity}
-              setMandalaComplexity={setMandalaComplexity}
-              mandalaLineWidth={mandalaLineWidth}
-              setMandalaLineWidth={setMandalaLineWidth}
-              mandalaColor1={mandalaColor1}
-              setMandalaColor1={setMandalaColor1}
-              mandalaColor2={mandalaColor2}
-              setMandalaColor2={setMandalaColor2}
-              fractalPreviewRef={fractalPreviewRef}
-              isDecoding={isDecoding}
-              isRecording={isRecording}
-              moveLayer={moveLayer}
-              layerOrder={layerOrder}
-            />
-
-            <InstinctSection
-              collapsed={collapsedSections.has("instinct")}
-              onToggle={() => toggleSection("instinct")}
-              instinctEnabled={instinctEnabled}
-              setInstinctEnabled={setInstinctEnabled}
-              instinctMode={instinctMode}
-              setInstinctMode={setInstinctMode}
-              instinctSpeed={instinctSpeed}
-              setInstinctSpeed={setInstinctSpeed}
-              instinctStrength={instinctStrength}
-              setInstinctStrength={setInstinctStrength}
-              instinctFrequency={instinctFrequency}
-              setInstinctFrequency={setInstinctFrequency}
-              instinctPreviewRef={instinctPreviewRef}
-              isDecoding={isDecoding}
-              isRecording={isRecording}
-              moveLayer={moveLayer}
-              layerOrder={layerOrder}
-            />
-
-            <ParticlesSection
-              collapsed={collapsedSections.has("particles")}
-              onToggle={() => toggleSection("particles")}
-              showParticles={showParticles}
-              setShowParticles={setShowParticles}
-              particleColor={particleColor}
-              setParticleColor={setParticleColor}
-              particleOpacity={particleOpacity}
-              setParticleOpacity={setParticleOpacity}
-              isDecoding={isDecoding}
-              isRecording={isRecording}
-            />
-
-            <TextSection
-              collapsed={collapsedSections.has("text")}
-              onToggle={() => toggleSection("text")}
-              songTitle={songTitle}
-              setSongTitle={setSongTitle}
-              titlePreset={titlePreset}
-              setTitlePreset={setTitlePreset}
-              titleColor={titleColor}
-              setTitleColor={setTitleColor}
-              moveLayer={moveLayer}
-              layerOrder={layerOrder}
-            />
+            {layerOrder.map(layer => {
+              switch (layer) {
+                case "onda":
+                  return (
+                    <WaveSection key="onda"
+                      collapsed={collapsedSections.has("wave")}
+                      onToggle={() => toggleSection("wave")}
+                      showWave={showWave}
+                      setShowWave={setShowWave}
+                      radiusRatio={radiusRatio}
+                      setRadiusRatio={setRadiusRatio}
+                      intensity={intensity}
+                      setIntensity={setIntensity}
+                      strokeWidth={strokeWidth}
+                      setStrokeWidth={setStrokeWidth}
+                      glowIntensity={glowIntensity}
+                      setGlowIntensity={setGlowIntensity}
+                      waveColor={waveColor}
+                      setWaveColor={setWaveColor}
+                      waveGradientMode={waveGradientMode}
+                      setWaveGradientMode={setWaveGradientMode}
+                      gradColor1={gradColor1}
+                      setGradColor1={setGradColor1}
+                      gradColor2={gradColor2}
+                      setGradColor2={setGradColor2}
+                      showParticles={showParticles}
+                      setShowParticles={setShowParticles}
+                      particleColor={particleColor}
+                      setParticleColor={setParticleColor}
+                      particleOpacity={particleOpacity}
+                      setParticleOpacity={setParticleOpacity}
+                      isDecoding={isDecoding}
+                      isRecording={isRecording}
+                      moveLayer={moveLayer}
+                      layerOrder={layerOrder}
+                    />
+                  );
+                case "fractal":
+                  return (
+                    <FractalSection key="fractal"
+                      collapsed={collapsedSections.has("fractal")}
+                      onToggle={() => toggleSection("fractal")}
+                      fractalEnabled={fractalEnabled}
+                      setFractalEnabled={setFractalEnabled}
+                      fractalType={fractalType}
+                      setFractalType={setFractalType}
+                      fractalLayerMode={fractalLayerMode}
+                      fractalOpacity={fractalOpacity}
+                      setFractalOpacity={setFractalOpacity}
+                      fractalAudioReactive={fractalAudioReactive}
+                      setFractalAudioReactive={setFractalAudioReactive}
+                      rippleRingCount={rippleRingCount}
+                      setRippleRingCount={setRippleRingCount}
+                      rippleSpeed={rippleSpeed}
+                      setRippleSpeed={setRippleSpeed}
+                      rippleAmplitude={rippleAmplitude}
+                      setRippleAmplitude={setRippleAmplitude}
+                      rippleThickness={rippleThickness}
+                      setRippleThickness={setRippleThickness}
+                      rippleColor1={rippleColor1}
+                      setRippleColor1={setRippleColor1}
+                      rippleColor2={rippleColor2}
+                      setRippleColor2={setRippleColor2}
+                      spiralDensity={spiralDensity}
+                      setSpiralDensity={setSpiralDensity}
+                      spiralRotationSpeed={spiralRotationSpeed}
+                      setSpiralRotationSpeed={setSpiralRotationSpeed}
+                      spiralTightness={spiralTightness}
+                      setSpiralTightness={setSpiralTightness}
+                      spiralDotSize={spiralDotSize}
+                      setSpiralDotSize={setSpiralDotSize}
+                      spiralColor1={spiralColor1}
+                      setSpiralColor1={setSpiralColor1}
+                      spiralColor2={spiralColor2}
+                      setSpiralColor2={setSpiralColor2}
+                      mandalaSegments={mandalaSegments}
+                      setMandalaSegments={setMandalaSegments}
+                      mandalaRotationSpeed={mandalaRotationSpeed}
+                      setMandalaRotationSpeed={setMandalaRotationSpeed}
+                      mandalaComplexity={mandalaComplexity}
+                      setMandalaComplexity={setMandalaComplexity}
+                      mandalaLineWidth={mandalaLineWidth}
+                      setMandalaLineWidth={setMandalaLineWidth}
+                      mandalaColor1={mandalaColor1}
+                      setMandalaColor1={setMandalaColor1}
+                      mandalaColor2={mandalaColor2}
+                      setMandalaColor2={setMandalaColor2}
+                      fractalPreviewRef={fractalPreviewRef}
+                      isDecoding={isDecoding}
+                      isRecording={isRecording}
+                      moveLayer={moveLayer}
+                      layerOrder={layerOrder}
+                    />
+                  );
+                case "instinct":
+                  return (
+                    <InstinctSection key="instinct"
+                      collapsed={collapsedSections.has("instinct")}
+                      onToggle={() => toggleSection("instinct")}
+                      instinctEnabled={instinctEnabled}
+                      setInstinctEnabled={setInstinctEnabled}
+                      instinctMode={instinctMode}
+                      setInstinctMode={setInstinctMode}
+                      instinctSpeed={instinctSpeed}
+                      setInstinctSpeed={setInstinctSpeed}
+                      instinctStrength={instinctStrength}
+                      setInstinctStrength={setInstinctStrength}
+                      instinctFrequency={instinctFrequency}
+                      setInstinctFrequency={setInstinctFrequency}
+                      instinctPreviewRef={instinctPreviewRef}
+                      isDecoding={isDecoding}
+                      isRecording={isRecording}
+                      moveLayer={moveLayer}
+                      layerOrder={layerOrder}
+                    />
+                  );
+                case "letras":
+                  return (
+                    <TextSection key="letras"
+                      collapsed={collapsedSections.has("text")}
+                      onToggle={() => toggleSection("text")}
+                      songTitle={songTitle}
+                      setSongTitle={setSongTitle}
+                      titlePreset={titlePreset}
+                      setTitlePreset={setTitlePreset}
+                      titleColor={titleColor}
+                      setTitleColor={setTitleColor}
+                      moveLayer={moveLayer}
+                      layerOrder={layerOrder}
+                    />
+                  );
+                default:
+                  return null;
+              }
+            })}
 
             {error ? (
               <div role="alert" className="rounded-lg border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-2 text-xs text-rose-200 shadow-lg shadow-rose-900/10">
@@ -1833,19 +1843,6 @@ export default function AudioVisualizer() {
               </div>
             ) : null}
 
-            <ExportSection
-              collapsed={collapsedSections.has("export")}
-              onToggle={() => toggleSection("export")}
-              exportSectionRef={exportSectionRef}
-              resolution={resolution}
-              setResolution={setResolution}
-              isExporting={isExporting}
-              isDecoding={isDecoding}
-              isRecording={isRecording}
-              audioUrl={audioUrl}
-              waveformReady={waveformReady}
-              handleGenerateAndDownloadRealtime={handleGenerateAndDownloadRealtime}
-            />
             {/* Conversion progress overlay */}
             <ConversionProgress
               progress={convProgress}
@@ -1869,6 +1866,16 @@ export default function AudioVisualizer() {
               </div>
             )}
           </div>
+          <ExportSection
+            resolution={resolution}
+            setResolution={setResolution}
+            isExporting={isExporting}
+            isDecoding={isDecoding}
+            isRecording={isRecording}
+            audioUrl={audioUrl}
+            waveformReady={waveformReady}
+            handleGenerateAndDownloadRealtime={handleGenerateAndDownloadRealtime}
+          />
         </aside>
 
         <div className="flex-1 min-w-0">
@@ -1884,16 +1891,16 @@ export default function AudioVisualizer() {
                 style={{ zIndex: 0 }} />
               <canvas ref={fractalCanvasRef}
                 className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
-                style={{ zIndex: 1 }} />
+                style={{ zIndex: layerZIndex["fractal"] ?? 1 }} />
               <canvas ref={instinctCanvasRef}
                 className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
-                style={{ zIndex: 1 }} />
+                style={{ zIndex: layerZIndex["instinct"] ?? 1 }} />
               <canvas ref={ondaCanvasRef}
                 className="absolute inset-0 w-full h-full rounded-lg"
-                style={{ zIndex: 2 }} />
+                style={{ zIndex: layerZIndex["onda"] ?? 2 }} />
               <canvas ref={letrasCanvasRef}
                 className="absolute inset-0 w-full h-full rounded-lg pointer-events-none"
-                style={{ zIndex: 3 }} />
+                style={{ zIndex: layerZIndex["letras"] ?? 3 }} />
               <canvas ref={tempCanvasRef} className="hidden" />
             </div>
             <audio ref={audioRef} className="hidden" />

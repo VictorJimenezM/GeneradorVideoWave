@@ -35,7 +35,8 @@ src/
 │   ├── CollapsibleSection.tsx # Reusable collapsible wrapper (extracted from AudioVisualizerG)
 │   ├── ConversionProgress.tsx # Cyberpunk terminal overlay during WebM→MP4 conversion
 │   ├── FileDropZone.tsx      # Drag-and-drop wrapper (extracted from AudioVisualizerG)
-│   ├── IAAsistentPanel.tsx   # IA Assistant checkbox + mode selector + BPM/beat status + playback controls
+│   ├── IAAsistentPanel.tsx   # IA Assistant panel (2-column header, playback controls, reset w/ confirm modal)
+│   ├── ConfirmModal.tsx       # Reusable confirm modal (createPortal, ESC/click-outside close, red confirm)
 │   └── sidebar/
 │       ├── AudioSection.tsx
 │       ├── PresetsSection.tsx
@@ -130,7 +131,7 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 
 | # | Section | Content |
 |---|---------|---------|
-| 0 | — | **IA Assistant** checkbox + mode (agresivo/sensible) + BPM + compás + mini waveform + **Volumen slider + [Previsualizar \| Detener] + Loop** + botón **Colapsar** + botón **↺ Reset** |
+| 0 | — | **Panel IA Assistant** en grid de 2 columnas (ver detalle abajo) |
 | 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
 | 3 | **Onda** (collapsible) | **Mostrar onda** checkbox, **Forma** (radio, intensidad, grosor, brillo), **Color** (color picker + gradiente select side by side, conditional Color 1/2) |
@@ -139,7 +140,24 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 | 6 | **Instinto Inconsciente** (collapsible) | Activar checkbox, modo (water/organic/fragments/ifs), velocidad, intensidad, frecuencia, preview (80×80) + botones ▲/▼ reordenar capa |
 | 7 | **Partículas** (collapsible) | Activar checkbox, color picker, opacidad slider |
 | 8 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
-| 9 | **Exportar** (collapsible) | Resolución 720p/1080p/4K, botón **Grabar y descargar** (icono rojo), advertencia foreground |
+| 9 | **Exportar** (collapsible) | Resolución 720p/1080p/4K (grid 3 col) + aviso "Mantén la pestaña en primer plano" al lado del título (texto ámbar pequeño). Botón **Grabar y descargar** plano (fondo índigo sólido, `px-2 py-1 text-[11px]`, icono rojo), tamaño similar a Previsualizar/Detener |
+
+### Panel IA Assistant (fila 0) — layout de 2 columnas
+
+Renderizado por `src/components/IAAsistentPanel.tsx`. Cabecera en `grid grid-cols-2 gap-2`:
+
+- **Columna 1**: mini waveform (`aspect-square`, el mayor cuadrado posible dentro de la columna). Si no hay audio cargado, muestra en la misma posición el placeholder **"Carga un audio primero"** (cuadrado reservado). El control de Volumen queda debajo del grid, en fila propia.
+- **Columna 2** (arriba→abajo):
+  1. Checkbox **IA Assistant** (estilo gris idéntico a Loop preview; check en violet, `h-3.5 w-3.5`).
+  2. **Loop preview** (checkbox, estilo gris).
+  3. Fila **[Colap. | Reset]**: `Colap.` abrevia "Colapsar"; `Reset` (↺) **abre `ConfirmModal`** antes de restablecer.
+  4. Fila **[Previsualizar | Detener]**:
+     - **Previsualizar**: fondo verde (`emerald-500`), iconos play + ojo; el texto "Previsualizar" aparece debajo en `hover`. En decodificación muestra solo un spinner giratorio (sin texto).
+     - **Detener**: fondo negro (`slate-950`), solo icono cuadrado de stop.
+
+- **Volumen** (fuera del grid, al final del panel): fila compacta con "Volumen" a la izquierda, barra `flex-1` en el centro y "%" a la derecha.
+- El modo (agresivo/sensible), BPM y compás se muestran debajo solo cuando la IA está activa y hay audio (igual que antes).
+- Botones Colapsar/Reset y el mini waveform se renderizan dentro del panel IA.
 
 ## Preset system
 
@@ -297,8 +315,24 @@ Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de l
 - **sampleRate** guardado en `sampleRateRef` durante `decodeAudioToMono`
 - **Fondo negro estático**: al activarse la IA, un `useEffect` pone `bgMode="fractal"`, `bgColor="#000000"`, `fractalEnabled=true`, `fractalLayerMode="overlay"`, además de fijar radio=0.50, intensidad=0.70, grosor=1.0, opacidad partículas=0.10 y bgImage=null. El fondo nunca cambia mientras la IA está activa.
 - **Visibilidad de controles fractales**: los controles del fractal se muestran también cuando `fractalEnabled=true` aunque `bgMode !== "fractal"` (para que el usuario vea los cambios de la IA).
-- **Playback controls**: Volume slider, Previsualizar/Detener buttons y Loop checkbox renderizados dentro de IAAsistentPanel (debajo del mini waveform), eliminados de la sección Exportar.
-- **Botón Colapsar y ↺ Reset**: renderizados dentro del panel IA (prop `onCollapseAll` y `onResetDefaults`).
+- **Playback controls**: Volume slider (fila compacta al final del panel), Previsualizar/Detener buttons y Loop checkbox renderizados dentro de IAAsistentPanel (en la columna 2, ver layout de 2 columnas arriba), eliminados de la sección Exportar.
+- **Botón Colapsar y Reset**: renderizados dentro del panel IA (prop `onCollapseAll` y `onResetDefaults`). El botón **Reset dispara `ConfirmModal`** (`src/components/ConfirmModal.tsx`): modal con `createPortal` a `document.body`, cierre con ESC o click fuera, botón confirmar en rojo; solo tras confirmar se ejecuta `onResetDefaults`.
+
+### ConfirmModal (nuevo componente)
+
+Modal de confirmación reutilizable en `src/components/ConfirmModal.tsx`.
+
+| Prop | Tipo | Propósito |
+|------|------|-----------|
+| `open` | `boolean` | Muestra/oculta el modal (`null` si `false`) |
+| `title` | `string` | Título del diálogo |
+| `message` | `ReactNode` | Cuerpo del mensaje |
+| `confirmLabel` | `string` | Texto del botón confirmar (def. "Confirmar") |
+| `cancelLabel` | `string` | Texto del botón cancelar (def. "Cancelar") |
+| `onConfirm` | `() => void` | Callback al confirmar |
+| `onCancel` | `() => void` | Callback al cancelar (click fuera, botón o ESC) |
+
+Se monta vía `createPortal` en `document.body`. Cerrar con click en el overlay, botón Cancelar o tecla `Escape`. El botón de confirmación es rojo (`bg-red-600`) para advertir acciones destructivas. Usado actualmente por el botón Reset del panel IA.
 
 ## Canvas sizing
 
@@ -367,8 +401,10 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
   - **MAJOR**: cambios incompatibles o rediseño visual grande
   - **MINOR**: nuevas funcionalidades, secciones o integraciones
   - **PATCH**: bugfixes, ajustes UI, refactors menores
+- **Sugerencia de bump pendiente**: la reestructuración del panel IA (cabecera de 2 columnas, modal de confirmación en Reset, iconos en Previsualizar/Detener, placeholder de mini wave) y el botón de exportar plano ameritan **v1.2.0** (MINOR). Actualizar el string en `App.tsx` al hacer push.
 
 ## Refactoring history
 
 - **v1.1.1** — Extracción de componentes visuales: CollapsibleSection, FileDropZone, 9 secciones del sidebar, y utilidades canvas/audio de AudioVisualizerG.tsx (~2562 → ~1894 líneas).
+- **v1.2.0 (sugerido)** — Rediseño del panel IA Assistant: cabecera en grid de 2 columnas (mini wave cuadrado en col 1; controles en col 2), botón Previsualizar con iconos play+ojo y hover-texto, Detener solo icono, Reset con `ConfirmModal`, Volumen en fila compacta; botón "Grabar y descargar" plano. Nuevo `src/components/ConfirmModal.tsx`.
 

@@ -86,35 +86,30 @@ export default function FractalSection({
   isDecoding, isRecording,
   moveLayer, layerOrder,
 }: Props) {
+  const fractalTitleButtons = (
+    <>
+      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("fractal", -1); }}
+        disabled={layerOrder.indexOf("fractal") <= 0}
+        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Subir capa">▲</button>
+      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("fractal", 1); }}
+        disabled={layerOrder.indexOf("fractal") >= layerOrder.length - 1}
+        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Bajar capa">▼</button>
+    </>
+  );
   return (
     <CollapsibleSection
       title="Fractal"
+      titleButtons={fractalTitleButtons}
+      enabled={fractalEnabled}
+      onToggleEnabled={setFractalEnabled}
       collapsed={collapsed}
       onToggle={onToggle}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(192,38,211,0.6)]" />}
       sectionBg="bg-fuchsia-950/30"
     >
       <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-            <input type="checkbox" checked={fractalEnabled} onChange={(e) => setFractalEnabled(e.target.checked)}
-              disabled={isDecoding || isRecording} aria-label="Activar fractal"
-              className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-            />
-            Activar
-          </label>
-          <div className="flex gap-0.5">
-            <button type="button" onClick={() => moveLayer("fractal", -1)}
-              disabled={layerOrder.indexOf("fractal") <= 0}
-              className="px-1.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Subir capa">▲</button>
-            <button type="button" onClick={() => moveLayer("fractal", 1)}
-              disabled={layerOrder.indexOf("fractal") >= layerOrder.length - 1}
-              className="px-1.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Bajar capa">▼</button>
-          </div>
-        </div>
-
         {fractalEnabled && (
           <>
             <select value={fractalType} onChange={(e) => setFractalType(e.target.value as FractalType)}

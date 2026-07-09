@@ -33,35 +33,30 @@ export default function InstinctSection({
   isDecoding, isRecording,
   moveLayer, layerOrder,
 }: Props) {
+  const instinctTitleButtons = (
+    <>
+      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("instinct", -1); }}
+        disabled={layerOrder.indexOf("instinct") <= 0}
+        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Subir capa">▲</button>
+      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("instinct", 1); }}
+        disabled={layerOrder.indexOf("instinct") >= layerOrder.length - 1}
+        className="px-2.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Bajar capa">▼</button>
+    </>
+  );
   return (
     <CollapsibleSection
-      title="Instinto Inconsciente"
+      title="Subconciencia"
+      titleButtons={instinctTitleButtons}
+      enabled={instinctEnabled}
+      onToggleEnabled={setInstinctEnabled}
       collapsed={collapsed}
       onToggle={onToggle}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-fuchsia-400 shadow-[0_0_6px_rgba(217,70,239,0.6)]" />}
       sectionBg="bg-fuchsia-950/30"
     >
       <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition-all duration-200 hover:text-slate-300">
-            <input type="checkbox" checked={instinctEnabled} onChange={(e) => setInstinctEnabled(e.target.checked)}
-              disabled={isDecoding || isRecording} aria-label="Activar Instinto Inconsciente"
-              className="h-3.5 w-3.5 cursor-pointer rounded border-slate-700 bg-slate-800 text-fuchsia-500 accent-fuchsia-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
-            />
-            Activar
-          </label>
-          <div className="flex gap-0.5">
-            <button type="button" onClick={() => moveLayer("instinct", -1)}
-              disabled={layerOrder.indexOf("instinct") <= 0}
-              className="px-1.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Subir capa">▲</button>
-            <button type="button" onClick={() => moveLayer("instinct", 1)}
-              disabled={layerOrder.indexOf("instinct") >= layerOrder.length - 1}
-              className="px-1.5 py-0.5 text-[10px] rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Bajar capa">▼</button>
-          </div>
-        </div>
-
         {instinctEnabled && (
           <>
             <select value={instinctMode} onChange={(e) => setInstinctMode(e.target.value as InstinctMode)}
