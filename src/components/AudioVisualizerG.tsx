@@ -130,6 +130,7 @@ export default function AudioVisualizer() {
     setWaveGradientMode("solid");
     setGradColor1("#6366f1");
     setGradColor2("#a855f7");
+    setWavePresetIdx(0);
     setVolume(0.7);
     setShowTitle(true);
     setSongTitle("");
@@ -393,6 +394,15 @@ export default function AudioVisualizer() {
   const [strokeWidth, setStrokeWidth] = useState(0.3);
   const [waveColor, setWaveColor] = useState("#ffffff");
   const [bgColor, setBgColor] = useState("#000000");
+
+  // 4 presets de onda (suave -> agresivo) aplicados via el stepper del header.
+  const WAVE_PRESETS = useMemo(() => [
+    { icon: "🌊", label: "1", radiusRatio: 0.60, intensity: 0.30, strokeWidth: 0.6, glowIntensity: 0.10, waveColor: "#e2e8f0", waveGradientMode: "solid" as const, gradColor1: "#60a5fa", gradColor2: "#a78bfa", particleColor: "#cbd5e1", particleOpacity: 0.40 },
+    { icon: "💧", label: "2", radiusRatio: 0.52, intensity: 0.50, strokeWidth: 1.5, glowIntensity: 0.30, waveColor: "#a78bfa", waveGradientMode: "gradient" as const, gradColor1: "#6366f1", gradColor2: "#a855f7", particleColor: "#a78bfa", particleOpacity: 0.60 },
+    { icon: "⚡", label: "3", radiusRatio: 0.46, intensity: 0.68, strokeWidth: 3.0, glowIntensity: 0.55, waveColor: "#f0abfc", waveGradientMode: "gradient" as const, gradColor1: "#ec4899", gradColor2: "#8b5cf6", particleColor: "#f0abfc", particleOpacity: 0.78 },
+    { icon: "🔥", label: "4", radiusRatio: 0.40, intensity: 0.80, strokeWidth: 6.0, glowIntensity: 0.85, waveColor: "#ffffff", waveGradientMode: "rainbow" as const, gradColor1: "#f43f5e", gradColor2: "#3b82f6", particleColor: "#f43f5e", particleOpacity: 0.92 },
+  ], []);
+  const [wavePresetIdx, setWavePresetIdx] = useState(0);
 
   const paramsRef = useRef({
     showWave,
@@ -1572,6 +1582,21 @@ export default function AudioVisualizer() {
     try { return JSON.parse(raw); } catch { return null; }
   }, []);
 
+  const applyWavePreset = useCallback((idx: number) => {
+    const p = WAVE_PRESETS[((idx % WAVE_PRESETS.length) + WAVE_PRESETS.length) % WAVE_PRESETS.length];
+    setRadiusRatio(p.radiusRatio);
+    setIntensity(p.intensity);
+    setStrokeWidth(p.strokeWidth);
+    setGlowIntensity(p.glowIntensity);
+    setWaveColor(p.waveColor);
+    setWaveGradientMode(p.waveGradientMode);
+    setGradColor1(p.gradColor1);
+    setGradColor2(p.gradColor2);
+    setParticleColor(p.particleColor);
+    setParticleOpacity(p.particleOpacity);
+    setWavePresetIdx(WAVE_PRESETS.indexOf(p));
+  }, []);
+
   const applyQuickPreset = useCallback((key: string) => {
     const expandBg = () => {
       setCollapsedSections(new Set(SECTION_KEYS.filter((k) => k !== "bg")));
@@ -1962,6 +1987,9 @@ export default function AudioVisualizer() {
                         isDecoding={isDecoding}
                         isRecording={isRecording}
                         titleButtons={waveTitleButtons}
+                        wavePresets={WAVE_PRESETS}
+                        wavePresetIdx={wavePresetIdx}
+                        onApplyWavePreset={applyWavePreset}
                         headerBg="bg-indigo-950/40"
                       />
                     </Fragment>

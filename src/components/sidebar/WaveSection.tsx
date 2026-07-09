@@ -33,6 +33,9 @@ interface Props {
   isRecording: boolean;
   titleButtons?: ReactNode;
   headerBg?: string;
+  wavePresets: { icon: string; label: string }[];
+  wavePresetIdx: number;
+  onApplyWavePreset: (idx: number) => void;
 }
 
 export default function WaveSection({
@@ -53,11 +56,33 @@ export default function WaveSection({
   isDecoding, isRecording,
   titleButtons,
   headerBg,
+  wavePresets,
+  wavePresetIdx,
+  onApplyWavePreset,
 }: Props) {
+  const currentWavePreset = wavePresets[wavePresetIdx] ?? wavePresets[0];
+  const waveHeaderCenter = (
+    <span className="flex items-center justify-between" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={() => onApplyWavePreset((wavePresetIdx - 1 + wavePresets.length) % wavePresets.length)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Preset de onda anterior"
+      >‹</button>
+      <span className="text-xs leading-none text-slate-300 px-1">
+        {currentWavePreset.icon} {currentWavePreset.label}
+      </span>
+      <button type="button" onClick={() => onApplyWavePreset((wavePresetIdx + 1) % wavePresets.length)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Siguiente preset de onda"
+      >›</button>
+    </span>
+  );
   return (
     <CollapsibleSection
       title="Onda"
       titleButtons={titleButtons}
+      headerCenter={waveHeaderCenter}
       enabled={showWave}
       onToggleEnabled={setShowWave}
       collapsed={collapsed}

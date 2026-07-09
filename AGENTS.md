@@ -137,7 +137,7 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
 | 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)). Header con **doble stepper**: `‹ N/4 ›` (muestra) + `‹ Normal ›` (filtro de color), ver [Steppers del header de Fondo](#steppers-del-header-de-fondo) |
 | 4 | **Fractal** (collapsible) | Stepper `‹🌊›` para tipo (ripple/spiral/mandala), checkbox reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
-| 5 | **Subconciencia + Onda** (collapsible, **bloque acoplado**) | Dos `CollapsibleSection` dentro de un `div.relative` con **un solo par ▲/▼** que mueve todo el bloque. Siempre juntos — Subconciencia (stepper `‹🌊›` + sliders velocidad/intensidad/frecuencia + preview 80×80) se renderiza primero y Onda (check + forma + color + partículas) encima. Partículas embebidas dentro de Onda. |
+| 5 | **Subconciencia + Onda** (collapsible, **bloque acoplado**) | Dos `CollapsibleSection` dentro de un `div.relative` con **un solo par ▲/▼** que mueve todo el bloque. Siempre juntos — Subconciencia (stepper `‹🌊›` + sliders velocidad/intensidad/frecuencia + preview 80×80) se renderiza primero y Onda (check + **stepper de 4 presets `‹🌊 1›`** + forma + color + partículas) encima. Partículas embebidas dentro de Onda. |
 | 6 | **Texto** (collapsible) | Input título, selector estilo (10 presets), color picker |
 | 7 | **Exportar** (collapsible) | Resolución 720p/1080p/4K (grid 3 col) + aviso "Mantén la pestaña en primer plano" al lado del título (texto ámbar pequeño). Botón **Grabar y descargar** plano (fondo índigo sólido, `px-2 py-1 text-[11px]`, icono rojo), tamaño similar a Previsualizar/Detener |
 
@@ -326,17 +326,19 @@ Each has a static preview canvas (80×80) in the UI.
 
 ## Stepper mode selector (‹ / ›)
 
-Fractal y SUB usan un stepper con dos flechas para cambiar entre modos/tipos directamente en el header.
+Fractal, SUB y Onda usan un stepper con dos flechas en el header.
 
 | Sección | Constante | Opciones |
 |---------|-----------|----------|
 | Fractal | `FRACTAL_TYPES` | 🌊 ripple · 🌀 spiral · 🔮 mandala |
 | SUB | `INSTINCT_MODES` | 🌊 water · 🧬 organic · 💎 fragment · 🌌 abyss |
+| Onda | `WAVE_PRESETS` | 🌊 1 suave · 💧 2 medio · ⚡ 3 intenso · 🔥 4 agresivo |
 
 - **Wrap-around infinito**: al llegar al final, `›` vuelve al principio y viceversa.
 - **Siempre visibles**: no dependen de `allCollapsed`.
-- **Header**: solo el icono (`‹ 🌊 ›`).
-- **Body**: icono + nombre completo (`🌊 WATER`, `🌊 ONDAS (RIPPLE)`) con borde inferior, encima de los controles.
+- **Header**: Onda muestra icono + número del preset (`‹ 🌊 1 ›`); Fractal/SUB muestran solo el icono.
+- **Stepper de Onda = presets de forma**: cada posición aplica (vía los mismos setters de los controles) radio, intensidad, grosor, brillo, color de onda, modo de gradiente + color1/2 y color/opacidad de partículas. No afecta `showParticles` ni otra lógica (render, IA, fractal, fondo, `layerOrder`). Los presets generales (`applyQuickPreset`) y `resetDefaults` quedan intactos salvo `wavePresetIdx=0`.
+- **Body** (Fractal/SUB): icono + nombre completo (`🌊 WATER`, `🌊 ONDAS (RIPPLE)`) con borde inferior, encima de los controles.
 - Posicionamiento: `justify-end` en el wrapper `flex-1` del `headerCenter` para que el stepper quede pegado a `titleButtons`.
 
 ### Instinct internal coefficients
@@ -501,4 +503,5 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - **v1.3.0** — Stepper mode selector (`‹ / ›`) para Fractal y SUB con wrap-around infinito. Nueva prop `headerCenter` en `CollapsibleSection`. Reorder buttons siempre visibles (sin dependencia de `allCollapsed`). Ghost button `▼` invisible en SUB para equilibrio visual. Constantes exportadas `INSTINCT_MODES` y `FRACTAL_TYPES`. Reordenación de defaults: `instinctSpeed=0.5`, `instinctStrength=25`, `instinctFrequency=0.012`, `rippleThickness=4.0`. Coeficientes internos: organic `×3.5`, abyss speed `÷2`. Audio section starts expanded por defecto.
 - **v1.4.0** — Gestor de muestras de imagen de fondo: `bgImagePresets` pasa a estado dinámico de 4 muestras persistido en `localStorage["bgImageSamples"]` (reemplazo por ranura con dataURL + restauración). Cuadrícula 2×2 con overlay "Click para cambiar imagen" (click selecciona y reemplaza). Carga Muestra 1 por defecto al iniciar. Se eliminan los botones "Sin imagen (Ninguna)" y "Remover". Se descarta `fondo_muestra_5.png`. `resetDefaults()` vuelve a Muestra 1 (imagen).
 - **v1.4.1** — Doble stepper en el header de Fondo: `‹ N/4 ›` rota entre las 4 muestras y `‹ Normal ›` aplica un filtro de color (`BG_IMAGE_FILTERS`: Normal/Gris/Sepia/Invertir/Vívido/Frío) a la imagen vía `ctx.filter` en `drawFondoCanvas()`. Aplica en preview y grabación; no se guarda en presets.
+- **v1.5.0** — Stepper de presets de Onda (`‹ 🌊 1 ›`) con 4 posiciones suave→agresivo (🌊/💧/⚡/🔥) en el header de la sección Onda. Cada posición aplica, vía los mismos setters de los controles, radio, intensidad, grosor, brillo, color de onda, modo de gradiente + color1/2 y color/opacidad de partículas; no afecta `showParticles` ni otra lógica. Constante `WAVE_PRESETS` en `AudioVisualizerG.tsx`, estado `wavePresetIdx` y `applyWavePreset`. `resetDefaults()` fija `wavePresetIdx=0`. Los presets generales quedan intactos.
 
