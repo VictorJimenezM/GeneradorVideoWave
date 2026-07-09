@@ -251,7 +251,7 @@ Reset defaults: single `resetDefaults()` button restores all 30+ state variables
 - `radiusRatio` = `0.60`, `intensity` = `0.80`, `strokeWidth` = `1.0`, `glowIntensity` = `0.40`
 - `waveColor` = `"#ffffff"`, `waveGradientMode` = `"solid"`, `gradColor1` = `"#6366f1"`, `gradColor2` = `"#a855f7"`
 - `instinctSpeed` = `0.5`, `instinctStrength` = `25`, `instinctFrequency` = `0.012`
-- `songTitle` = `""`, `titleColor` = `"#ffffff"`, `titlePreset` = `"bottom-center"`
+- `songTitle` = `""`, `titleColor` = `"#ff0000"` (rojo), `titlePreset` = `"bottom-center"`, `titleFont` = `"arial"`, `titleWeight` = `"bold"`, `titleAlign` = `"center"`, `titleValign` = `"middle"`, `titleSizeScale` = `1.5`
 - `resolution` = `"1080p"`, `loop` = `true`, `isLoopingUI` = `true`
 
 ## 5-canvas rendering pipeline
@@ -534,4 +534,5 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - **v1.6.0** — Mejoras del submenú Texto: 8 fuentes (`TITLE_FONTS`: 4 clásicas del sistema + 4 extremas vía Google Fonts en `index.html`), toggles Negrita/Cursiva, alineación horizontal/vertical, slider Tamaño (grupo Serios); Texto en curva + Movimiento (Ninguno/Pulso/Flotar/Zoom/Rotación) con Intensidad (grupo Creativos). `drawTitle()` reescrito para aceptar `TitleStyle` + `timeSec` (curva y animación por tiempo), compartido en preview (`letrasCanvas`) y grabación. Nuevos estados `titleFont/Weight/Italic/Align/Valign/SizeScale/Curve/Motion/MotionAmount` sincronizados en `paramsRef` y persistidos en presets generales. `applyTitlePreset(id)` aplica layout.
 - **v1.6.1** — Fix: los controles de Texto (fuente, negrita/cursiva, alineación, curva, movimiento) no afectaban el render porque los 9 nuevos estados de título faltaban en el array de dependencias del `useEffect` que sincroniza `paramsRef`. Al añadirlos, el `tick()` ya dibuja el título con los valores actuales.
 - **v1.6.2** — Submenú Texto: se elimina el `<select>` de posición; los botones de alineación horizontal/vertical ahora posicionan el texto en el canvas. `drawTitle` deriva `x/y` de `align`/`valign` (en vez de `preset.x/y`). `applyTitlePreset` y la prop se eliminan; `titlePreset` queda solo como fallback de tamaño.
+- **v1.6.3** — Fix: el título solo se dibujaba dentro de `tick()` (durante preview/grabación), así que no aparecía al escribirlo en modo idle. Nueva `redrawTitleCanvas()` (mismo patrón que `redrawFondoCanvas`/`redrawFractalCanvas`) que dibuja el título en `letrasCanvas` en modo idle; se llama en el `useEffect` de `paramsRef` y en el de montaje. Render estático (`timeSec=0`); las animaciones de movimiento se ven al reproducir.
 

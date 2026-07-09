@@ -134,14 +134,14 @@ export default function AudioVisualizer() {
     setVolume(0.7);
     setShowTitle(true);
     setSongTitle("");
-    setTitleColor("#ffffff");
+    setTitleColor("#ff0000");
     setTitlePreset("bottom-center");
     setTitleFont("arial");
     setTitleWeight("bold");
     setTitleItalic(false);
     setTitleAlign("center");
-    setTitleValign("bottom");
-    setTitleSizeScale(1);
+    setTitleValign("middle");
+    setTitleSizeScale(1.5);
     setTitleCurve(0);
     setTitleMotion("none");
     setTitleMotionAmount(0.3);
@@ -222,14 +222,14 @@ export default function AudioVisualizer() {
   const [volume, setVolume] = useState(0.7);
   const [showTitle, setShowTitle] = useState(true);
   const [songTitle, setSongTitle] = useState("");
-  const [titleColor, setTitleColor] = useState("#ffffff");
+  const [titleColor, setTitleColor] = useState("#ff0000");
   const [titlePreset, setTitlePreset] = useState("bottom-center");
   const [titleFont, setTitleFont] = useState("arial");
   const [titleWeight, setTitleWeight] = useState<"normal" | "bold">("bold");
   const [titleItalic, setTitleItalic] = useState(false);
   const [titleAlign, setTitleAlign] = useState<"left" | "center" | "right">("center");
-  const [titleValign, setTitleValign] = useState<"top" | "middle" | "bottom">("bottom");
-  const [titleSizeScale, setTitleSizeScale] = useState(1);
+  const [titleValign, setTitleValign] = useState<"top" | "middle" | "bottom">("middle");
+  const [titleSizeScale, setTitleSizeScale] = useState(1.5);
   const [titleCurve, setTitleCurve] = useState(0);
   const [titleMotion, setTitleMotion] = useState<"none" | "pulse" | "float" | "zoom" | "rotate">("none");
   const [titleMotionAmount, setTitleMotionAmount] = useState(0.3);
@@ -495,6 +495,7 @@ export default function AudioVisualizer() {
     bgImageRef.current = bgImage;
     redrawFondoCanvas();
     redrawFractalCanvas();
+    redrawTitleCanvas();
   }, [
     showWave, radiusRatio, intensity, strokeWidth, waveColor, bgColor, bgImageFilter, bgImage,
     showTitle, songTitle, titleColor, titlePreset, titleFont, titleWeight, titleItalic, titleAlign, titleValign, titleSizeScale, titleCurve, titleMotion, titleMotionAmount, glowIntensity, showParticles, particleColor, particleOpacity, waveGradientMode, gradColor1, gradColor2,
@@ -877,6 +878,33 @@ export default function AudioVisualizer() {
       drawFractalBg(fxctx, fxc, p as FractalParams, amp);
       fxctx.restore();
     }
+  };
+
+  const redrawTitleCanvas = () => {
+    const lc = letrasCanvasRef.current;
+    const lctx = letrasCtxRef.current;
+    if (!lc || !lctx) return;
+    if (drawingModeRef.current !== "idle") return;
+
+    syncAllCanvasSizes();
+    const p = paramsRef.current;
+    lctx.clearRect(0, 0, lc.width, lc.height);
+    if (!p.showTitle || !p.songTitle) return;
+
+    const style: TitleStyle = {
+      presetId: p.titlePreset,
+      family: resolveTitleFamily(p.titleFont),
+      weight: p.titleWeight,
+      italic: p.titleItalic,
+      align: p.titleAlign,
+      valign: p.titleValign,
+      sizeScale: p.titleSizeScale,
+      curve: p.titleCurve,
+      motion: p.titleMotion,
+      motionAmount: p.titleMotionAmount,
+      color: p.titleColor,
+    };
+    drawTitle(lctx, lc, p.songTitle, style, 0);
   };
 
   const tick = () => {
@@ -1807,6 +1835,7 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     ensureCanvasContext();
+    redrawTitleCanvas();
     loadSampleBgImage();
     initFFmpeg()
       .then(() => { console.log("[app] ✓ FFmpeg listo"); setFfmpegReady(true); })
