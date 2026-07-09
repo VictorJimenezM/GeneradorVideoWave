@@ -33,6 +33,11 @@ interface Props {
   setTitleMotionAmount: (v: number) => void;
   moveLayer: (layer: string, dir: number) => void;
   layerOrder: string[];
+  textPresets: { icon: string; label: string }[];
+  textPresetIdx: number;
+  onApplyTextPreset: (idx: number) => void;
+  isDecoding: boolean;
+  isRecording: boolean;
 }
 
 const ALIGN_OPTS: { value: "left" | "center" | "right"; label: string }[] = [
@@ -70,6 +75,8 @@ export default function TextSection({
   titleMotion, setTitleMotion,
   titleMotionAmount, setTitleMotionAmount,
   moveLayer, layerOrder,
+  textPresets, textPresetIdx, onApplyTextPreset,
+  isDecoding, isRecording,
 }: Props) {
   const classicFonts = TITLE_FONTS.filter((f) => f.group === "clasicas");
   const extremeFonts = TITLE_FONTS.filter((f) => f.group === "extremas");
@@ -89,6 +96,25 @@ export default function TextSection({
   const segBtn = (active: boolean) =>
     `px-2 py-0.5 text-[10px] rounded transition-all ${active ? "bg-indigo-600 text-white" : "bg-slate-800/60 text-slate-400 hover:text-slate-200"}`;
 
+  const currentTextPreset = textPresets[textPresetIdx] ?? textPresets[0];
+  const textHeaderCenter = (
+    <span className="flex items-center justify-between" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={() => onApplyTextPreset((textPresetIdx - 1 + textPresets.length) % textPresets.length)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Preset de texto anterior"
+      >‹</button>
+      <span className="text-xs leading-none text-slate-300 px-1">
+        {currentTextPreset.icon} {textPresetIdx + 1}/{textPresets.length}
+      </span>
+      <button type="button" onClick={() => onApplyTextPreset((textPresetIdx + 1) % textPresets.length)}
+        disabled={isDecoding || isRecording}
+        className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Siguiente preset de texto"
+      >›</button>
+    </span>
+  );
+
   return (
     <CollapsibleSection
       title="Texto"
@@ -98,6 +124,7 @@ export default function TextSection({
       collapsed={collapsed}
       onToggle={onToggle}
       allCollapsed={allCollapsed}
+      headerCenter={textHeaderCenter}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]" />}
       sectionBg="bg-rose-950/30"
     >

@@ -131,6 +131,7 @@ export default function AudioVisualizer() {
     setGradColor1("#6366f1");
     setGradColor2("#a855f7");
     setWavePresetIdx(0);
+    setTextPresetIdx(0);
     setVolume(0.7);
     setShowTitle(true);
     setSongTitle("");
@@ -421,6 +422,15 @@ export default function AudioVisualizer() {
     { icon: "🔥", label: "4", radiusRatio: 0.40, intensity: 0.80, strokeWidth: 6.0, glowIntensity: 0.85, waveColor: "#ffffff", waveGradientMode: "rainbow" as const, gradColor1: "#f43f5e", gradColor2: "#3b82f6", particleColor: "#f43f5e", particleOpacity: 0.92 },
   ], []);
   const [wavePresetIdx, setWavePresetIdx] = useState(0);
+
+  // 4 presets de texto (sutil -> creativo) aplicados via el stepper del header.
+  const TEXT_PRESETS = useMemo(() => [
+    { icon: "💬", label: "1", titleColor: "#e2e8f0", titleAlign: "center" as const, titleValign: "middle" as const, titleSizeScale: 1.0, titleCurve: 0, titleMotion: "none" as const, titleMotionAmount: 0.3 },
+    { icon: "✨", label: "2", titleColor: "#a78bfa", titleAlign: "center" as const, titleValign: "bottom" as const, titleSizeScale: 1.3, titleCurve: 0.3, titleMotion: "pulse" as const, titleMotionAmount: 0.4 },
+    { icon: "⚡", label: "3", titleColor: "#f0abfc", titleAlign: "center" as const, titleValign: "middle" as const, titleSizeScale: 1.6, titleCurve: 0.6, titleMotion: "float" as const, titleMotionAmount: 0.6 },
+    { icon: "🔥", label: "4", titleColor: "#f43f5e", titleAlign: "center" as const, titleValign: "top" as const, titleSizeScale: 2.0, titleCurve: 1.0, titleMotion: "rotate" as const, titleMotionAmount: 0.9 },
+  ], []);
+  const [textPresetIdx, setTextPresetIdx] = useState(0);
 
   const paramsRef = useRef({
     showWave,
@@ -1670,6 +1680,18 @@ export default function AudioVisualizer() {
     setWavePresetIdx(WAVE_PRESETS.indexOf(p));
   }, []);
 
+  const applyTextPreset = useCallback((idx: number) => {
+    const p = TEXT_PRESETS[((idx % TEXT_PRESETS.length) + TEXT_PRESETS.length) % TEXT_PRESETS.length];
+    setTitleColor(p.titleColor);
+    setTitleAlign(p.titleAlign);
+    setTitleValign(p.titleValign);
+    setTitleSizeScale(p.titleSizeScale);
+    setTitleCurve(p.titleCurve);
+    setTitleMotion(p.titleMotion);
+    setTitleMotionAmount(p.titleMotionAmount);
+    setTextPresetIdx(TEXT_PRESETS.indexOf(p));
+  }, []);
+
   const applyQuickPreset = useCallback((key: string) => {
     const expandBg = () => {
       setCollapsedSections(new Set(SECTION_KEYS.filter((k) => k !== "bg")));
@@ -2112,6 +2134,11 @@ export default function AudioVisualizer() {
                       setTitleMotionAmount={setTitleMotionAmount}
                       moveLayer={moveLayer}
                       layerOrder={layerOrder}
+                      textPresets={TEXT_PRESETS}
+                      textPresetIdx={textPresetIdx}
+                      onApplyTextPreset={applyTextPreset}
+                      isDecoding={isDecoding}
+                      isRecording={isRecording}
                     />
                   );
                 default:
