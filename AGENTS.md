@@ -483,12 +483,16 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 ## Versioning
 
 - La versión se define como string en `src/App.tsx` al final del layout
-- Se actualiza manualmente antes de cada push a la rama `main`
+- **Se actualiza con cada commit**: el número de versión (string en `App.tsx`) y la entrada correspondiente en el historial de "Refactoring history" deben actualizarse como parte del mismo commit que introduce los cambios, no de forma diferida. No se acumulan bumps pendientes.
 - Formato semver: `MAJOR.MINOR.PATCH`
   - **MAJOR**: cambios incompatibles o rediseño visual grande
   - **MINOR**: nuevas funcionalidades, secciones o integraciones
   - **PATCH**: bugfixes, ajustes UI, refactors menores
-- **Sugerencia de bump pendiente**: Los cambios recientes (stepper y reordenación) ya se aplicaron como **v1.3.0** (MINOR). Actualizar el string en `App.tsx` al hacer push.
+- Regla de bump por commit:
+  - Si el commit añade una nueva funcionalidad, sección o integración → incrementar **MINOR** (PATCH a 0).
+  - Si el commit es solo bugfix, ajuste UI o refactor menor → incrementar **PATCH**.
+  - Si el commit introduce cambios incompatibles o rediseño visual grande → incrementar **MAJOR** (MINOR y PATCH a 0).
+- El commit que cambia la versión debe incluir en su mensaje el nuevo número (p.ej. `bump v1.4.1`) y registrar la entrada en el historial de "Refactoring history".
 
 ## Refactoring history
 
