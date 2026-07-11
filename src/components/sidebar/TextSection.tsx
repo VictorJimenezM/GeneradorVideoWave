@@ -104,8 +104,8 @@ export default function TextSection({
         className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
         aria-label="Preset de texto anterior"
       >‹</button>
-      <span className="text-xs leading-none text-slate-300 px-1">
-        {currentTextPreset.icon} {textPresetIdx + 1}/{textPresets.length}
+      <span className="text-xs leading-none text-slate-300">
+        {currentTextPreset.icon}
       </span>
       <button type="button" onClick={() => onApplyTextPreset((textPresetIdx + 1) % textPresets.length)}
         disabled={isDecoding || isRecording}

@@ -135,9 +135,10 @@ Audio is **not** streamed through Web Audio API nodes; raw samples are indexed d
 | 0 | — | **Panel IA Assistant** en grid de 2 columnas (ver detalle abajo) |
 | 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
-| 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 presets + picker), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)). Header con **doble stepper**: `‹ N/4 ›` (muestra) + `‹ Normal ›` (filtro de color), ver [Steppers del header de Fondo](#steppers-del-header-de-fondo) |
+| 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 muestras de color en el header + picker personalizado en el cuerpo), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)). Header con **doble stepper** (`‹ N/4 ›` muestra + `‹ Normal ›` filtro de color) que **solo se muestra en modo Imagen**; en modo Color el header muestra las 5 muestras de color, ver [Steppers del header de Fondo](#steppers-del-header-de-fondo) |
 | 4 | **Fractal** (collapsible) | Stepper `‹🌊›` para tipo (ripple/spiral/mandala), checkbox reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
-| 5 | **Subconciencia + Onda** (collapsible, **bloque acoplado**) | Dos `CollapsibleSection` dentro de un `div.relative` con **un solo par ▲/▼** que mueve todo el bloque. Siempre juntos — Subconciencia (stepper `‹🌊›` + sliders velocidad/intensidad/frecuencia + preview 80×80) se renderiza primero y Onda (check + **stepper de 4 presets `‹🌊 1›`** + forma + color + partículas) encima. Partículas embebidas dentro de Onda. |
+| 5 | **Subconciencia** (collapsible) | Stepper `‹🌊›` para modo (water/organic/fragments/ifs), sliders velocidad/intensidad/frecuencia, preview 80×80. Botones ▲/▼ independientes para reordenar. |
+| 5b | **Onda** (collapsible) | Check on/off + **stepper de 4 presets `‹🌊 1›`** + forma + color + partículas. **Fijo al final del sidebar** — sin botones ▲/▼, siempre encima de todo. Partículas embebidas dentro de Onda. |
 | 6 | **Texto** (collapsible) | Input título + color. Grupo **Serios**: fuente (8: 4 clásicas + 4 extremas Google Fonts), Negrita, Cursiva, **alineación horizontal/vertical (posiciona el texto en el canvas)**, Tamaño. Grupo **Creativos**: Texto en curva, Movimiento (Ninguno/Pulso/Flotar/Zoom/Rotación) + Intensidad. |
 | 7 | **Exportar** (collapsible) | Resolución 720p/1080p/4K (grid 3 col) + aviso "Mantén la pestaña en primer plano" al lado del título (texto ámbar pequeño). Botón **Grabar y descargar** plano (fondo índigo sólido, `px-2 py-1 text-[11px]`, icono rojo), tamaño similar a Previsualizar/Detener |
 
@@ -160,12 +161,9 @@ Renderizado por `src/components/IAAsistentPanel.tsx`. Cabecera en `grid grid-col
 
 ### Layer order constraints
 
-- `layerOrder` (sin incluir `"fondo"`, que es siempre z-0) siempre mantiene `"instinct"` inmediatamente antes de `"onda"` — garantizado por `normalizeLayerOrder()`: si no están adyacentes, se recolocan juntos
-- `moveInstinctOndaBlock()` los mueve como **par inseparable**
-- `moveLayer()` redirige "instinct"/"onda" al block move
-- **Onda siempre encima de Subconciencia**: en la composición de grabación, instinct se dibuja primero y onda encima, evitando que la distorsión del canvas Instinct cubra la forma de onda
+- Cada capa (fractal, instinct, onda, letras) se reordenaba individualmente con `moveLayer()`
 - Orden por defecto: `["fractal", "instinct", "onda", "letras"]`
-- El bloque Instinct+Onda puede reordenarse arriba/abajo respecto a Fractal y Texto con los botones ▲/▼
+- SUB y Onda tienen botones ▲/▼ independientes, pueden reordenarse por separado en cualquier posición
 
 ### Header controls por sección
 
@@ -174,18 +172,17 @@ Cada `CollapsibleSection` puede tener 3 tipos de controles en su header (botón 
 | Control | Secciones que lo tienen | Detalle |
 |---------|------------------------|---------|
 | **ON/OFF toggle** | Fractal, SUB, Onda, Texto | Pill de `w-12 h-5` (48px), rojo ON / gris OFF, círculo blanco deslizante. Texto ON a `left-1`, OFF a `right-1`. Usa `e.stopPropagation()` para no colapsar la sección. Renderizado solo cuando existe el prop `enabled` + `onToggleEnabled`. |
-| **`headerCenter` stepper** | Fractal, SUB | Botones `‹`/`›` + icono del modo actual. `bg-fuchsia-900/40 rounded`, `text-sm px-3 py-0.5`. Siempre visibles (wrap-around infinito: al llegar al final vuelve al inicio y viceversa). Usan `e.stopPropagation()` para no colapsar. Solo icono en header; icono + nombre completo en el body. |
-| **▲/▼ reorder** | Fractal (▲+▼), SUB (▲), Onda (▼), Texto (▲+▼) | Botones `text-[10px] px-2.5 py-0.5`, `bg-slate-800/60 text-slate-400`. Se pasan via `titleButtons` a `CollapsibleSection`. Siempre visibles (no dependen de `allCollapsed`). Se renderizan entre el headerCenter/ON/OFF. |
-| **headerBg** | SUB, Onda | `bg-indigo-950/40` en ambos headers para marcar visualmente que son un bloque acoplado. Las demás secciones no tienen fondo en el header. |
+| **`headerCenter` stepper** | Fractal, SUB, Onda, Texto | Botones `‹`/`›` + icono del modo actual. `bg-fuchsia-900/40 rounded`, `text-sm px-3 py-0.5`. Siempre visibles (wrap-around infinito: al llegar al final vuelve al inicio y viceversa). Usan `e.stopPropagation()` para no colapsar. Solo icono en header; icono + nombre completo en el body. |
+| **▲/▼ reorder** | Fractal (▲+▼), SUB (▲+▼), Texto (▲+▼) | Botones `text-[10px] px-2.5 py-0.5`, `bg-slate-800/60 text-slate-400`. Se pasan via `titleButtons` a `CollapsibleSection`. Siempre visibles (no dependen de `allCollapsed`). Cada sección tiene sus propios botones ▲/▼ independientes. |
 
 **Peculiaridades:**
 
 - **Solo las secciones que son capas del canvas** (Fractal, SUB, Onda, Texto) tienen ON/OFF y/o ▲/▼. Audio, Presets, Fondo y Exportar no tienen ninguno.
-- **SUB y Onda comparten el reordenamiento como bloque**: ▲ está en SUB, ▼ está en Onda. `moveInstinctOndaBlock()` mueve ambas como par inseparable. `normalizeLayerOrder()` garantiza que siempre estén adyacentes.
+- **Onda está fijo al final del sidebar** — sin botones ▲/▼, siempre encima de todo. Se renderiza hardcoded después del `layerOrder.map()`.
+- **SUB y Onda** tienen botones ▲/▼ independientes, pueden reordenarse por separado en cualquier posición
 - **Fractal y Texto** tienen ambos botones (▲+▼) en `titleButtons`, cada uno mueve su propia capa individualmente.
-- **headerBg** solo se usa en SUB y Onda (`bg-indigo-950/40`) para distinguir visualmente el bloque del resto.
-- **SUB ghost button**: SUB tiene un `▼` invisible (`text-transparent pointer-events-none`) antes de `▲` en `titleButtons` para equilibrar el ancho visual con Fractal (que tiene `▲▼` reales).
-- **Cuando `headerCenter` existe**, `titleButtons` se renderizan dentro del mismo wrapper flex, sin gap entre ellos (`justify-end` en `headerCenter` para que el stepper quede pegado a `titleButtons`).
+- **Cuando `headerCenter` existe**, `titleButtons` y `headerCenter` se renderizan juntos en un único `<span className="flex flex-1 items-center justify-end gap-0.5">`, de modo que los botones ▲/▼ quedan pegados al stepper, alineados a la derecha antes del ON/OFF.
+- **Steppers uniformes**: los 4 steppers (Fractal, SUB, Onda, Texto) usan la misma estructura visual: botones `‹`/`›` con `bg-fuchsia-900/40` e icono centrado sin padding extra (`px-1` eliminado de Onda y Texto).
 
 ### Gestor de muestras de imagen (pestaña Imagen)
 
@@ -209,6 +206,8 @@ El header de la sección Fondo usa la prop `headerCenter` de `CollapsibleSection
 - **Stepper de muestra** (`‹ N/4 ›`): rota entre las 4 muestras (`bgImagePresets`) con `handleBgImagePresetChange`; muestra `{idx+1}/{total}`. Al usarlo selecciona la muestra y activa modo Imagen.
 - **Stepper de filtro** (`‹ Normal ›`): rota entre `BG_IMAGE_FILTERS` y aplica `bgImageFilter` a la imagen seleccionada. Centro muestra la etiqueta del filtro (p.ej. "Gris").
 
+**Visibilidad por modo**: los dos steppers del header **solo se muestran cuando `bgMode === "image"`**. En `bgMode === "color"` el header muestra las **5 muestras de color** (cuadritos sin texto: verde croma `#00ff00`, negro `#000000`, blanco `#ffffff`, azul `#0000ff`, rojo `#ff0000`); cada muestra aplica `setBgColor(valor)` y limpia `activeBgPreset`, y la activa se resalta con borde violeta. El cuerpo de la pestaña Color queda solo con el picker **Personalizado** (color arbitrario). En `bgMode === "fractal"` el header queda vacío (sin steppers ni muestras).
+
 Los filtros se aplican en `drawFondoCanvas()` vía `ctx.filter` (solo afecta a la imagen, no al color sólido) y se pasan tanto en `redrawFondoCanvas()` (idle) como en `tick()` (preview/grabación) mediante `getBgFilterCss()`. `bgImageFilter` vive en estado y en `paramsRef`. **No se guarda en el sistema de presets**.
 
 | Filtro | Valor | CSS |
@@ -226,7 +225,7 @@ Los filtros se aplican en `drawFondoCanvas()` vía `ctx.filter` (solo afecta a l
 |------|-------|---------|
 | Quick presets (built-in) | 5 (croma, image, fractal1-3) | Hardcoded in `applyQuickPreset` |
 | Saved presets | N | `localStorage: quickPreset_{key}` + `quickPreset_saved` index |
-| BG color presets | 5 (dark, purple, cyan, emerald, warm) | Static `bgPresets` array |
+| BG color presets | 5 botones fijos (verde croma `#00ff00`, negro `#000000`, blanco `#ffffff`, azul `#0000ff`, rojo `#ff0000`) que seleccionan `bgColor` directamente | Render en `BgSection` (reemplazan los antiguos `bgPresets` con nombre) |
 | Title presets | 10 (bottom-center, bottom-left, …, compact) | Static `TITLE_PRESETS` array |
 | BG image presets | 4 (`fondo_muestra_{1..4}`) | `/public/` files (por defecto); personalizadas persistidas en `localStorage["bgImageSamples"]` como dataURL |
 
@@ -337,13 +336,13 @@ Fractal, SUB y Onda usan un stepper con dos flechas en el header.
 - **Wrap-around infinito**: al llegar al final, `›` vuelve al principio y viceversa.
 - **Siempre visibles**: no dependen de `allCollapsed`.
 - **Header**: Onda muestra icono + número del preset (`‹ 🌊 1 ›`); Fractal/SUB muestran solo el icono.
-- **Stepper de Onda = presets de forma**: cada posición aplica (vía los mismos setters de los controles) radio, intensidad, grosor, brillo, color de onda, modo de gradiente + color1/2 y color/opacidad de partículas. La etiqueta del header es `‹ icon N/4 ›` (ej. `🌊 1/4`). El preset 1 (más pasivo) apaga `showParticles`; los presets 2-4 lo encienden. No afecta otra lógica (render, IA, fractal, fondo, `layerOrder`). Los presets generales (`applyQuickPreset`) y `resetDefaults` quedan intactos salvo `wavePresetIdx=0`.
+- **Stepper de Onda = presets de forma**: cada posición aplica (vía los mismos setters de los controles) radio, intensidad, grosor, brillo, color de onda, modo de gradiente + color1/2 y color/opacidad de partículas. La etiqueta del header es `‹ icon ›` (solo icono, ej. `🌊`); no muestra el contador `N/4`. El preset 1 (más pasivo) apaga `showParticles`; los presets 2-4 lo encienden. No afecta otra lógica (render, IA, fractal, fondo, `layerOrder`). Los presets generales (`applyQuickPreset`) y `resetDefaults` quedan intactos salvo `wavePresetIdx=0`.
 - **Body** (Fractal/SUB): icono + nombre completo (`🌊 WATER`, `🌊 ONDAS (RIPPLE)`) con borde inferior, encima de los controles.
-- Posicionamiento: `justify-end` en el wrapper `flex-1` del `headerCenter` para que el stepper quede pegado a `titleButtons`.
+- Posicionamiento: los botones ▲/▼ (`titleButtons`) y el stepper (`headerCenter`) se renderizan juntos en un único `<span className="flex flex-1 items-center justify-end gap-0.5">`, de modo que quedan pegados, alineados a la derecha antes del ON/OFF.
 
 ### Presets de Onda (stepper del header)
 
-La sección **Onda** del sidebar incluye un stepper `‹ 🌊 1/4 ›` con 4 posiciones de suave → agresivo. Su propósito es aplicar combinaciones de parámetros de la onda de forma rápida, exactamente igual que si un usuario moviera cada control manualmente.
+La sección **Onda** del sidebar incluye un stepper `‹ 🌊 ›` (solo icono) con 4 posiciones de suave → agresivo. Su propósito es aplicar combinaciones de parámetros de la onda de forma rápida, exactamente igual que si un usuario moviera cada control manualmente.
 
 - **Constante**: `WAVE_PRESETS` (definida en `AudioVisualizerG.tsx`) — array de 4 objetos `{ icon, label, radiusRatio, intensity, strokeWidth, glowIntensity, waveColor, waveGradientMode, gradColor1, gradColor2, particleColor, particleOpacity }`.
 - **Estado**: `wavePresetIdx` (índice actual) y función `applyWavePreset(idx)`.
@@ -366,7 +365,7 @@ La sección **Texto** del sidebar se divide en **Serios** (fuente, negrita, curs
 - **Controles creativos**: slider **Texto en curva** (0…1, arco superior `∧`; el texto queda en orientación correcta, sin invertir) · `<select>` **Movimiento** (`none`/`pulse`/`float`/`zoom`/`rotate`) · slider **Intensidad** (0–1).
 - **`drawTitle(ctx, canvas, text, style, timeSec)`** (`title.ts`): compone `ctx.font` con familia/peso/cursiva; aplica escala/offset/rotación según `motion` usando `timeSec` (pulso=latido, float=deriva vertical, zoom=escala continua, rotate=rotación leve); si `curve≠0` reparte los caracteres en un arco. Se dibuja en `letrasCanvas` (preview) y en el canvas principal durante grabación (para que `captureStream` lo incluya).
 - **Estado**: `titleFont`, `titleWeight`, `titleItalic`, `titleAlign`, `titleValign`, `titleSizeScale`, `titleCurve`, `titleMotion`, `titleMotionAmount` (sincronizados en `paramsRef` para el `tick`). Persistidos en presets generales (`saveCurrentToActivePreset` / `applyQuickPreset`).
-- **Stepper de presets de Texto** (stepper del header, 4 posiciones): al igual que el de Onda, la sección **Texto** tiene un stepper `‹ icon N/4 ›` con 4 posiciones (💬/✨/⚡/🔥, de sutil → creativo) en el header. Cada posición aplica, vía los mismos setters de los controles, **solo** `titleColor`, `titleAlign`, `titleValign`, `titleSizeScale`, `titleCurve`, `titleMotion` y `titleMotionAmount`; no toca fuente/peso/itálica ni `titlePreset`, ni afecta otras capas (fondo/fractal/onda/instinct), render/tick, IA ni `layerOrder`. `resetDefaults()` fija `textPresetIdx=0`. Los iconos y valores: 💬1 `#e2e8f0`/centro-medio/tamaño1.0/curva0/none/0.3 · ✨2 `#a78bfa`/centro-abajo/tamaño1.3/curva0.3/pulse/0.4 · ⚡3 `#f0abfc`/centro-medio/tamaño1.6/curva0.6/float/0.6 · 🔥4 `#f43f5e`/centro-arriba/tamaño2.0/curva1.0/rotate/0.9. El stepper se deshabilita durante decodificación (`isDecoding`) y grabación (`isRecording`).
+- **Stepper de presets de Texto** (stepper del header, 4 posiciones): al igual que el de Onda, la sección **Texto** tiene un stepper `‹ icon ›` (solo icono) con 4 posiciones (💬/✨/⚡/🔥, de sutil → creativo) en el header. Cada posición aplica, vía los mismos setters de los controles, **solo** `titleColor`, `titleAlign`, `titleValign`, `titleSizeScale`, `titleCurve`, `titleMotion` y `titleMotionAmount`; no toca fuente/peso/itálica ni `titlePreset`, ni afecta otras capas (fondo/fractal/onda/instinct), render/tick, IA ni `layerOrder`. `resetDefaults()` fija `textPresetIdx=0`. Los iconos y valores: 💬1 `#e2e8f0`/centro-medio/tamaño1.0/curva0/none/0.3 · ✨2 `#a78bfa`/centro-abajo/tamaño1.3/curva0.3/pulse/0.4 · ⚡3 `#f0abfc`/centro-medio/tamaño1.6/curva0.6/float/0.6 · 🔥4 `#f43f5e`/centro-arriba/tamaño2.0/curva1.0/rotate/0.9. El stepper se deshabilita durante decodificación (`isDecoding`) y grabación (`isRecording`).
 
 ### Instinct internal coefficients
 
@@ -412,13 +411,12 @@ El intervalo de beat se ajusta en tiempo real según `getCurrentAmplitude()`:
 
 ### Scheduled changes (`applyBeatChanges`)
 
-Disparados en el `tick()` cada vez que se cruza un beat. No modifican forma de la onda (intensity, strokeWidth, radiusRatio, glowIntensity se mantienen intactos).
+Disparados en el `tick()` cada vez que se cruza un beat. La IA solo modifica los **steppers** del sidebar — no toca parámetros individuales.
 
 | Cada X beats | Cambios | Prob (agresivo) | Prob (sensible) |
 |-------------|---------|:---:|:---:|
-| 4 | waveColor, waveGradientMode, gradColor1/2, showParticles, particleColor | 85% | 45% |
-| 8 | fractalEnabled, fractalType, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2, instinctEnabled, instinctMode | 100% | 70% |
-| 16 | spiralRotationSpeed, spiralTightness, spiralDotSize, mandalaRotationSpeed, mandalaLineWidth, fractalOpacity, spiralColor1, mandalaColor1, instinctSpeed, instinctStrength, instinctFrequency | 100% | 90% |
+| 4 | `onApplyWavePreset(randomIdx)` + `onApplyTextPreset(randomIdx)` — rota aleatoriamente entre los 4 presets de Onda y los 4 de Texto | 85% | 45% |
+| 8 | `setFractalType(randomType)` (3 tipos) + `setInstinctEnabled(true)` + `setInstinctMode(randomMode)` (4 modos) | 100% | 70% |
 
 ### Integración en AudioVisualizerG.tsx
 
@@ -538,4 +536,11 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - **v1.6.3** — Fix: el título solo se dibujaba dentro de `tick()` (durante preview/grabación), así que no aparecía al escribirlo en modo idle. Nueva `redrawTitleCanvas()` (mismo patrón que `redrawFondoCanvas`/`redrawFractalCanvas`) que dibuja el título en `letrasCanvas` en modo idle; se llama en el `useEffect` de `paramsRef` y en el de montaje. Render estático (`timeSec=0`); las animaciones de movimiento se ven al reproducir.
 - **v1.6.4** — Fix: "Texto en curva" se dibujaba invertido (pies arriba) porque `drawCurvedText` colocaba el centro del círculo encima del texto y rotaba cada carácter 180° en la base. Ahora el centro queda debajo (`centerY = cy + radius`) y el esparcimiento parte de la cima (`startAngle = -π/2 - spread/2`), así el arco queda en la parte superior y los caracteres en orientación correcta. El slider de curva pasa de rango `-1…1` a `0…1` (solo arco superior derecho). Layout del menú Texto: el selector de color y el de fuente ahora comparten la misma fila (cada uno la mitad del ancho) para ahorrar espacio; el `<select>` de fuente se movió fuera del grupo "Serios" y quedó a la derecha del color. Fuente Georgia reemplazada por Verdana en el grupo Clásicas (Georgia y Times New Roman se veían idénticos en el canvas). Los `optgroup` del selector de fuente pasan a etiquetarse "Serios" (clásicas del sistema) y "Creativos" (extremas vía Google Fonts).
 - **v1.7.0** — Stepper de presets de Texto (`‹ icon N/4 ›`) con 4 posiciones sutil→creativo (💬/✨/⚡/🔥) en el header de la sección Texto, al mismo estilo que el stepper de Onda. Cada posición aplica, vía los mismos setters de los controles, solo `titleColor`, `titleAlign`, `titleValign`, `titleSizeScale`, `titleCurve`, `titleMotion` y `titleMotionAmount`; no toca fuente/peso/itálica ni `titlePreset`, ni afecta otras capas, render/tick, IA ni `layerOrder`. Constante `TEXT_PRESETS` en `AudioVisualizerG.tsx`, estado `textPresetIdx` y `applyTextPreset`. `resetDefaults()` fija `textPresetIdx=0`. Deshabilitado durante decodificación y grabación.
+- **v1.7.1** — Menú Fondo: los dos steppers del header (muestra + filtro de color) ahora solo se muestran cuando `bgMode === "image"`; en `bgMode === "color"` el header queda sin steppers y el cuerpo muestra 5 botones de color directo (verde croma/negro/blanco/azul/rojo) que aplican `bgColor` y limpian `activeBgPreset`. Se reemplazan los antiguos `bgPresets` con nombre por estos botones fijos en `BgSection`.
+- **v1.7.2** — Fase 2 del menú Fondo: las 5 muestras de color suben al header (aprovechando que en modo Color el header estaba vacío). En `bgMode === "color"` el header muestra los 5 cuadritos de color sin texto (solo muestra de color, con resaltado violeta en el activo); el cuerpo de Color queda solo con el picker Personalizado. En `bgMode === "image"` se mantienen los dos steppers; en `bgMode === "fractal"` el header queda vacío.
+- **v1.7.3** — Los steppers de presets de Onda y Texto ahora muestran solo el icono en el header (`‹ icon ›`), eliminando el contador `N/4`. Sin cambios en la lógica de aplicación de presets ni en render/tick.
+- **v1.7.4** — SUB (instinct) y Onda separados como secciones independientes con botones ▲/▼ propios. Se eliminan `moveInstinctOndaBlock()`, `normalizeLayerOrder()` y el `<Fragment key="instinct-onda">`. Cada sección tiene sus propios `▲` y `▼` que mueven su capa individualmente vía `moveLayer(layer, dir)`. Se elimina `headerBg="bg-indigo-950/40"` de ambos headers. 
+- **v1.7.5** — Onda fijo al final del sidebar: se elimina `case "onda"` del switch, se renderiza `WaveSection` hardcoded después del `layerOrder.map()`, sin botones ▲/▼. Steppers reposicionados entre botones de reordenar y ON/OFF: `titleButtons` y `headerCenter` se envuelven en un único `<span className="flex flex-1 items-center justify-end gap-0.5">`. Steppers uniformes: se elimina `px-1` del icono en Onda y Texto para que todos los 4 steppers tengan la misma estructura visual.
+- **v1.8.0** — IA Assistant simplificada: `applyBeatChanges` ahora solo opera los 4 steppers del sidebar (Onda, Texto, Fractal, Subconciencia) en vez de ~30 parámetros individuales. Cada 4 beats rota `onApplyWavePreset` y `onApplyTextPreset` (random idx); cada 8 beats rota `setFractalType` (3 tipos), `setInstinctMode` (4 modos) y enciende `setInstinctEnabled(true)`. `ControlSetters` reducido de ~35 a 10 campos. Se eliminan `WAVE_COLORS`, `BG_COLORS`, `pick()`, `rnd()`. Nuevo `randInt()`.
+- **v1.8.1** — Fix: `<button>` nested dentro de `<button>` en CollapsibleSection (warning de React). Header de CollapsibleSection cambia de `<button>` a `<div role="button">` con `tabIndex={0}` y `onKeyDown` para Enter/Space. Fix: `applyWavePreset` y `applyTextPreset` se movieron antes de la llamada `useIAAsistent` para evitar temporal dead zone (`ReferenceError: Cannot access before initialization`).
  

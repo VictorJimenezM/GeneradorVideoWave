@@ -1,8 +1,7 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordRTC from "recordrtc";
 import IAAsistentPanel from "./IAAsistentPanel";
 import { useIAAsistent } from "../hooks/useIAAsistent";
-import type { ControlSetters } from "../hooks/useIAAsistent";
 import { initFFmpeg, isFFmpegLoaded, isFFmpegLoading, waitForFFmpeg, convertToMp4 } from "../utils/convertWebmToMp4";
 import ConversionProgress from "./ConversionProgress";
 import CollapsibleSection from "./CollapsibleSection";
@@ -16,7 +15,7 @@ import InstinctSection from "./sidebar/InstinctSection";
 
 import TextSection from "./sidebar/TextSection";
 import ExportSection from "./sidebar/ExportSection";
-import type { FractalType, FractalParams } from "../utils/fractals";
+import { FRACTAL_TYPES, type FractalType, type FractalParams } from "../utils/fractals";
 import type { InstinctMode, InstinctParams } from "../utils/instinct";
 import { drawFractalBackground as drawFractalBg, drawFractalPreview as drawFractalPrev, TWO_PI, clamp, hexToRgba } from "../utils/fractals";
 import { INSTINCT_MODES, drawInstinctFractal, drawInstinctPreview } from "../utils/instinct";
@@ -303,45 +302,9 @@ export default function AudioVisualizer() {
   const [instinctEnabled, setInstinctEnabled] = useState(false);
 
   // --- LAYER ORDER (excluding fondo - it's always bottom) ---
-  const normalizeLayerOrder = useCallback((order: string[]): string[] => {
-    const instIdx = order.indexOf("instinct");
-    const ondaIdx = order.indexOf("onda");
-    if (instIdx < 0 || ondaIdx < 0) return order;
-    if (instIdx + 1 === ondaIdx) return order;
-    const filtered = order.filter(l => l !== "instinct" && l !== "onda");
-    const insertAt = Math.min(instIdx, ondaIdx);
-    filtered.splice(insertAt, 0, "instinct", "onda");
-    return filtered;
-  }, []);
-
-  const [layerOrder, setLayerOrder] = useState<string[]>(() =>
-    normalizeLayerOrder(["fractal", "instinct", "onda", "letras"])
-  );
-
-  const moveInstinctOndaBlock = useCallback((dir: number) => {
-    setLayerOrder(prev => {
-      const instIdx = prev.indexOf("instinct");
-      const ondaIdx = prev.indexOf("onda");
-      if (instIdx < 0 || ondaIdx < 0 || instIdx + 1 !== ondaIdx) return prev;
-      if (dir === -1 && instIdx > 0) {
-        const next = prev.filter(l => l !== "instinct" && l !== "onda");
-        next.splice(instIdx - 1, 0, "instinct", "onda");
-        return next;
-      }
-      if (dir === 1 && ondaIdx < prev.length - 1) {
-        const next = prev.filter(l => l !== "instinct" && l !== "onda");
-        next.splice(ondaIdx, 0, "instinct", "onda");
-        return next;
-      }
-      return prev;
-    });
-  }, []);
+  const [layerOrder, setLayerOrder] = useState<string[]>(["fractal", "instinct", "onda", "letras"]);
 
   const moveLayer = useCallback((layer: string, dir: number) => {
-    if (layer === "instinct" || layer === "onda") {
-      moveInstinctOndaBlock(dir);
-      return;
-    }
     setLayerOrder(prev => {
       const idx = prev.indexOf(layer);
       if (idx < 0) return prev;
@@ -350,9 +313,9 @@ export default function AudioVisualizer() {
       const next = [...prev];
       next.splice(idx, 1);
       next.splice(newIdx, 0, layer);
-      return normalizeLayerOrder(next);
+      return next;
     });
-  }, [moveInstinctOndaBlock, normalizeLayerOrder]);
+  }, []);
 
   const layerZIndex = useMemo(() => {
     const map: Record<string, number> = { fondo: 0 };
@@ -526,6 +489,34 @@ export default function AudioVisualizer() {
     redrawFractalCanvas();
   }, [instinctEnabled, instinctMode, instinctSpeed, instinctStrength, instinctFrequency]);
 
+  const applyWavePreset = useCallback((idx: number) => {
+    const p = WAVE_PRESETS[((idx % WAVE_PRESETS.length) + WAVE_PRESETS.length) % WAVE_PRESETS.length];
+    setRadiusRatio(p.radiusRatio);
+    setIntensity(p.intensity);
+    setStrokeWidth(p.strokeWidth);
+    setGlowIntensity(p.glowIntensity);
+    setWaveColor(p.waveColor);
+    setWaveGradientMode(p.waveGradientMode);
+    setGradColor1(p.gradColor1);
+    setGradColor2(p.gradColor2);
+    setParticleColor(p.particleColor);
+    setParticleOpacity(p.particleOpacity);
+    setShowParticles(idx !== 0);
+    setWavePresetIdx(WAVE_PRESETS.indexOf(p));
+  }, []);
+
+  const applyTextPreset = useCallback((idx: number) => {
+    const p = TEXT_PRESETS[((idx % TEXT_PRESETS.length) + TEXT_PRESETS.length) % TEXT_PRESETS.length];
+    setTitleColor(p.titleColor);
+    setTitleAlign(p.titleAlign);
+    setTitleValign(p.titleValign);
+    setTitleSizeScale(p.titleSizeScale);
+    setTitleCurve(p.titleCurve);
+    setTitleMotion(p.titleMotion);
+    setTitleMotionAmount(p.titleMotionAmount);
+    setTextPresetIdx(TEXT_PRESETS.indexOf(p));
+  }, []);
+
   // --- IA Asistent ---
   const {
     isActive: isIAAsistentActive,
@@ -540,16 +531,17 @@ export default function AudioVisualizer() {
     sampleRate: sampleRateRef.current,
     duration: durationRef.current,
     setters: {
-      setIntensity, setStrokeWidth, setWaveColor, setGlowIntensity,
-      setWaveGradientMode, setGradColor1, setGradColor2, setRadiusRatio,
-      setBgMode, setBgColor,
-      setFractalEnabled, setFractalType, setFractalLayerMode, setFractalOpacity,
-      setRippleSpeed, setRippleAmplitude, setRippleThickness, setRippleColor1, setRippleColor2,
-      setSpiralRotationSpeed, setSpiralTightness, setSpiralDotSize, setSpiralColor1,
-      setMandalaRotationSpeed, setMandalaLineWidth, setMandalaColor1,
-      setShowParticles, setParticleColor, setParticleOpacity,
-      setInstinctMode, setInstinctSpeed, setInstinctStrength, setInstinctFrequency, setInstinctEnabled,
-    } as ControlSetters,
+      onApplyWavePreset: applyWavePreset,
+      wavePresetCount: WAVE_PRESETS.length,
+      onApplyTextPreset: applyTextPreset,
+      textPresetCount: TEXT_PRESETS.length,
+      setFractalType,
+      fractalTypeCount: FRACTAL_TYPES.length,
+      setInstinctMode,
+      instinctModeCount: INSTINCT_MODES.length,
+      setFractalEnabled,
+      setInstinctEnabled,
+    },
   });
 
   const iaStateRef = useRef({ active: false, update: (_t: number, _a: number) => {} });
@@ -1664,34 +1656,6 @@ export default function AudioVisualizer() {
     try { return JSON.parse(raw); } catch { return null; }
   }, []);
 
-  const applyWavePreset = useCallback((idx: number) => {
-    const p = WAVE_PRESETS[((idx % WAVE_PRESETS.length) + WAVE_PRESETS.length) % WAVE_PRESETS.length];
-    setRadiusRatio(p.radiusRatio);
-    setIntensity(p.intensity);
-    setStrokeWidth(p.strokeWidth);
-    setGlowIntensity(p.glowIntensity);
-    setWaveColor(p.waveColor);
-    setWaveGradientMode(p.waveGradientMode);
-    setGradColor1(p.gradColor1);
-    setGradColor2(p.gradColor2);
-    setParticleColor(p.particleColor);
-    setParticleOpacity(p.particleOpacity);
-    setShowParticles(idx !== 0);
-    setWavePresetIdx(WAVE_PRESETS.indexOf(p));
-  }, []);
-
-  const applyTextPreset = useCallback((idx: number) => {
-    const p = TEXT_PRESETS[((idx % TEXT_PRESETS.length) + TEXT_PRESETS.length) % TEXT_PRESETS.length];
-    setTitleColor(p.titleColor);
-    setTitleAlign(p.titleAlign);
-    setTitleValign(p.titleValign);
-    setTitleSizeScale(p.titleSizeScale);
-    setTitleCurve(p.titleCurve);
-    setTitleMotion(p.titleMotion);
-    setTitleMotionAmount(p.titleMotionAmount);
-    setTextPresetIdx(TEXT_PRESETS.indexOf(p));
-  }, []);
-
   const applyQuickPreset = useCallback((key: string) => {
     const expandBg = () => {
       setCollapsedSections(new Set(SECTION_KEYS.filter((k) => k !== "bg")));
@@ -1732,7 +1696,7 @@ export default function AudioVisualizer() {
       if (saved.instinctStrength !== undefined) setInstinctStrength(saved.instinctStrength);
       if (saved.instinctFrequency !== undefined) setInstinctFrequency(saved.instinctFrequency);
       if (saved.instinctEnabled !== undefined) setInstinctEnabled(saved.instinctEnabled);
-      if (saved.layerOrder !== undefined) setLayerOrder(normalizeLayerOrder(saved.layerOrder));
+      if (saved.layerOrder !== undefined) setLayerOrder(saved.layerOrder);
       setWaveColor(saved.waveColor);
       setWaveGradientMode(saved.waveGradientMode);
       setGradColor1(saved.gradColor1);
@@ -2021,83 +1985,39 @@ export default function AudioVisualizer() {
                   );
                 case "instinct": {
                   const instIdx = arr.indexOf("instinct");
-                  const ondaIdx = arr.indexOf("onda");
-                  const canMoveUp = instIdx > 0;
-                  const canMoveDown = ondaIdx < arr.length - 1;
                   const instinctTitleButtons = (
                     <>
-                      <span className="px-2.5 py-0.5 text-[10px] leading-none rounded text-transparent pointer-events-none select-none">▼</span>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); moveInstinctOndaBlock(-1); }}
-                        disabled={!canMoveUp}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("instinct", -1); }}
+                        disabled={instIdx <= 0}
                         className="px-2.5 py-0.5 text-[10px] leading-none rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                        aria-label="Subir bloque">▲</button>
+                        aria-label="Subir SUB">▲</button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer("instinct", 1); }}
+                        disabled={instIdx >= arr.length - 1}
+                        className="px-2.5 py-0.5 text-[10px] leading-none rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        aria-label="Bajar SUB">▼</button>
                     </>
                   );
-                  const waveTitleButtons = (
-                    <button type="button" onClick={(e) => { e.stopPropagation(); moveInstinctOndaBlock(1); }}
-                      disabled={!canMoveDown}
-                      className="px-2.5 py-0.5 text-[10px] leading-none rounded bg-slate-800/60 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      aria-label="Bajar bloque">▼</button>
-                  );
                   return (
-                    <Fragment key="instinct-onda">
-                      <InstinctSection
-                        collapsed={collapsedSections.has("instinct")}
-                        onToggle={() => toggleSection("instinct")}
-                        allCollapsed={allCollapsed}
-                        instinctEnabled={instinctEnabled}
-                        setInstinctEnabled={setInstinctEnabled}
-                        instinctMode={instinctMode}
-                        setInstinctMode={setInstinctMode}
-                        instinctSpeed={instinctSpeed}
-                        setInstinctSpeed={setInstinctSpeed}
-                        instinctStrength={instinctStrength}
-                        setInstinctStrength={setInstinctStrength}
-                        instinctFrequency={instinctFrequency}
-                        setInstinctFrequency={setInstinctFrequency}
-                        instinctPreviewRef={instinctPreviewRef}
-                        isDecoding={isDecoding}
-                        isRecording={isRecording}
-                        titleButtons={instinctTitleButtons}
-                        headerBg="bg-indigo-950/40"
-                      />
-                      <WaveSection
-                        collapsed={collapsedSections.has("wave")}
-                        onToggle={() => toggleSection("wave")}
-                        allCollapsed={allCollapsed}
-                        showWave={showWave}
-                        setShowWave={setShowWave}
-                        radiusRatio={radiusRatio}
-                        setRadiusRatio={setRadiusRatio}
-                        intensity={intensity}
-                        setIntensity={setIntensity}
-                        strokeWidth={strokeWidth}
-                        setStrokeWidth={setStrokeWidth}
-                        glowIntensity={glowIntensity}
-                        setGlowIntensity={setGlowIntensity}
-                        waveColor={waveColor}
-                        setWaveColor={setWaveColor}
-                        waveGradientMode={waveGradientMode}
-                        setWaveGradientMode={setWaveGradientMode}
-                        gradColor1={gradColor1}
-                        setGradColor1={setGradColor1}
-                        gradColor2={gradColor2}
-                        setGradColor2={setGradColor2}
-                        showParticles={showParticles}
-                        setShowParticles={setShowParticles}
-                        particleColor={particleColor}
-                        setParticleColor={setParticleColor}
-                        particleOpacity={particleOpacity}
-                        setParticleOpacity={setParticleOpacity}
-                        isDecoding={isDecoding}
-                        isRecording={isRecording}
-                        titleButtons={waveTitleButtons}
-                        wavePresets={WAVE_PRESETS}
-                        wavePresetIdx={wavePresetIdx}
-                        onApplyWavePreset={applyWavePreset}
-                        headerBg="bg-indigo-950/40"
-                      />
-                    </Fragment>
+                    <InstinctSection
+                      key="instinct"
+                      collapsed={collapsedSections.has("instinct")}
+                      onToggle={() => toggleSection("instinct")}
+                      allCollapsed={allCollapsed}
+                      instinctEnabled={instinctEnabled}
+                      setInstinctEnabled={setInstinctEnabled}
+                      instinctMode={instinctMode}
+                      setInstinctMode={setInstinctMode}
+                      instinctSpeed={instinctSpeed}
+                      setInstinctSpeed={setInstinctSpeed}
+                      instinctStrength={instinctStrength}
+                      setInstinctStrength={setInstinctStrength}
+                      instinctFrequency={instinctFrequency}
+                      setInstinctFrequency={setInstinctFrequency}
+                      instinctPreviewRef={instinctPreviewRef}
+                      isDecoding={isDecoding}
+                      isRecording={isRecording}
+                      titleButtons={instinctTitleButtons}
+                    />
                   );
                 }
                 case "letras":
@@ -2145,6 +2065,41 @@ export default function AudioVisualizer() {
                   return null;
               }
             })}
+
+            <WaveSection
+              collapsed={collapsedSections.has("wave")}
+              onToggle={() => toggleSection("wave")}
+              allCollapsed={allCollapsed}
+              showWave={showWave}
+              setShowWave={setShowWave}
+              radiusRatio={radiusRatio}
+              setRadiusRatio={setRadiusRatio}
+              intensity={intensity}
+              setIntensity={setIntensity}
+              strokeWidth={strokeWidth}
+              setStrokeWidth={setStrokeWidth}
+              glowIntensity={glowIntensity}
+              setGlowIntensity={setGlowIntensity}
+              waveColor={waveColor}
+              setWaveColor={setWaveColor}
+              waveGradientMode={waveGradientMode}
+              setWaveGradientMode={setWaveGradientMode}
+              gradColor1={gradColor1}
+              setGradColor1={setGradColor1}
+              gradColor2={gradColor2}
+              setGradColor2={setGradColor2}
+              showParticles={showParticles}
+              setShowParticles={setShowParticles}
+              particleColor={particleColor}
+              setParticleColor={setParticleColor}
+              particleOpacity={particleOpacity}
+              setParticleOpacity={setParticleOpacity}
+              isDecoding={isDecoding}
+              isRecording={isRecording}
+              wavePresets={WAVE_PRESETS}
+              wavePresetIdx={wavePresetIdx}
+              onApplyWavePreset={applyWavePreset}
+            />
 
             {error ? (
               <div role="alert" className="rounded-lg border border-rose-800/50 bg-rose-950/30 backdrop-blur-sm p-2 text-xs text-rose-200 shadow-lg shadow-rose-900/10">

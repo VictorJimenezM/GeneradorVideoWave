@@ -68,8 +68,8 @@ export default function WaveSection({
         className="text-sm px-3 py-0.5 leading-none text-slate-200 bg-fuchsia-900/40 hover:bg-fuchsia-800/50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
         aria-label="Preset de onda anterior"
       >‹</button>
-      <span className="text-xs leading-none text-slate-300 px-1">
-        {currentWavePreset.icon} {wavePresetIdx + 1}/{wavePresets.length}
+      <span className="text-xs leading-none text-slate-300">
+        {currentWavePreset.icon}
       </span>
       <button type="button" onClick={() => onApplyWavePreset((wavePresetIdx + 1) % wavePresets.length)}
         disabled={isDecoding || isRecording}

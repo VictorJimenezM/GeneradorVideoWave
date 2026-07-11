@@ -1,42 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { FractalType } from "../utils/fractals";
 import type { InstinctMode } from "../utils/instinct";
 
 export type IAIAssistantMode = "aggressive" | "sensitive";
 
 export interface ControlSetters {
-  setIntensity: (v: number) => void;
-  setStrokeWidth: (v: number) => void;
-  setWaveColor: (v: string) => void;
-  setGlowIntensity: (v: number) => void;
-  setWaveGradientMode: (v: "solid" | "gradient" | "rainbow") => void;
-  setGradColor1: (v: string) => void;
-  setGradColor2: (v: string) => void;
-  setRadiusRatio: (v: number) => void;
-  setBgMode: (v: "color" | "image" | "fractal") => void;
-  setBgColor: (v: string) => void;
-  setFractalEnabled: (v: boolean) => void;
-  setFractalType: (v: "ripple" | "spiral" | "mandala") => void;
-  setFractalLayerMode: (v: "replace" | "overlay") => void;
-  setFractalOpacity: (v: number) => void;
-  setRippleSpeed: (v: number) => void;
-  setRippleAmplitude: (v: number) => void;
-  setRippleThickness: (v: number) => void;
-  setRippleColor1: (v: string) => void;
-  setRippleColor2: (v: string) => void;
-  setSpiralRotationSpeed: (v: number) => void;
-  setSpiralTightness: (v: number) => void;
-  setSpiralDotSize: (v: number) => void;
-  setSpiralColor1: (v: string) => void;
-  setMandalaRotationSpeed: (v: number) => void;
-  setMandalaLineWidth: (v: number) => void;
-  setMandalaColor1: (v: string) => void;
-  setShowParticles: (v: boolean) => void;
-  setParticleColor: (v: string) => void;
-  setParticleOpacity: (v: number) => void;
+  onApplyWavePreset: (idx: number) => void;
+  wavePresetCount: number;
+  onApplyTextPreset: (idx: number) => void;
+  textPresetCount: number;
+  setFractalType: (v: FractalType) => void;
+  fractalTypeCount: number;
   setInstinctMode: (v: InstinctMode) => void;
-  setInstinctSpeed: (v: number) => void;
-  setInstinctStrength: (v: number) => void;
-  setInstinctFrequency: (v: number) => void;
+  instinctModeCount: number;
+  setFractalEnabled: (v: boolean) => void;
   setInstinctEnabled: (v: boolean) => void;
 }
 
@@ -103,23 +80,8 @@ function detectBPM(samples: Float32Array, sampleRate: number): number {
   return Math.max(70, Math.min(200, bpm));
 }
 
-const WAVE_COLORS = [
-  "#00FFFF", "#FF00FF", "#FFFF00", "#00FF00", "#FF0000",
-  "#FF8800", "#FF1493", "#BF00FF", "#32CD32", "#00CED1",
-  "#FF4500", "#7FFF00", "#FF69B4", "#1E90FF", "#FFD700",
-];
-
-const BG_COLORS = [
-  "#020617", "#0f172a", "#1e1b4b", "#2d1b2e", "#1c1917",
-  "#042f2e", "#1a0a2e", "#0a1628", "#2e0a1a", "#2e1a0a",
-];
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function rnd(min: number, max: number): number {
-  return min + Math.random() * (max - min);
+function randInt(max: number): number {
+  return Math.floor(Math.random() * max);
 }
 
 function applyBeatChanges(
@@ -127,55 +89,18 @@ function applyBeatChanges(
   mode: IAIAssistantMode,
   s: ControlSetters,
 ) {
-  const per2 = mode === "aggressive" ? 0.7 : 0.25;
   const per4 = mode === "aggressive" ? 0.85 : 0.45;
   const per8 = mode === "aggressive" ? 1.0 : 0.7;
-  const per16 = mode === "aggressive" ? 1.0 : 0.9;
 
   if (beatIndex % 4 === 0 && Math.random() < per4) {
-    s.setWaveColor(pick(WAVE_COLORS));
-    if (Math.random() < 0.5) {
-      s.setWaveGradientMode(pick(["solid", "gradient", "rainbow"]) as "solid" | "gradient" | "rainbow");
-    }
-    if (Math.random() < 0.4) {
-      s.setGradColor1(pick(WAVE_COLORS));
-      s.setGradColor2(pick(WAVE_COLORS));
-    }
-    if (Math.random() < 0.5) {
-      s.setShowParticles(Math.random() > 0.4);
-    }
-    if (Math.random() < 0.4) {
-      s.setParticleColor(pick(WAVE_COLORS));
-    }
+    s.onApplyWavePreset(randInt(s.wavePresetCount));
+    s.onApplyTextPreset(randInt(s.textPresetCount));
   }
 
   if (beatIndex > 0 && beatIndex % 8 === 0 && Math.random() < per8) {
-    s.setFractalEnabled(Math.random() > 0.2);
-    s.setFractalType(pick(["ripple", "spiral", "mandala"]));
-    s.setRippleSpeed(rnd(0.3, 1.5));
-    s.setRippleAmplitude(rnd(10, 50));
-    s.setRippleThickness(rnd(3.0, 6.0));
-    s.setRippleColor1(pick(WAVE_COLORS));
+    s.setFractalType(["ripple", "spiral", "mandala"][randInt(s.fractalTypeCount)] as FractalType);
     s.setInstinctEnabled(true);
-    s.setInstinctMode(pick(["water", "organic", "fragments", "ifs"]) as InstinctMode);
-    s.setInstinctSpeed(rnd(0.3, 3.0));
-    s.setInstinctStrength(rnd(10, 60));
-  }
-
-  if (beatIndex > 0 && beatIndex % 16 === 0 && Math.random() < per16) {
-    s.setSpiralRotationSpeed(rnd(0.1, 0.6));
-    s.setSpiralTightness(rnd(0.1, 0.4));
-    s.setSpiralDotSize(rnd(4, 6));
-    s.setMandalaRotationSpeed(rnd(0.3, 1.5));
-    s.setMandalaLineWidth(rnd(3.0, 5.0));
-    s.setFractalOpacity(rnd(0.4, 1.0));
-    if (Math.random() < 0.4) {
-      s.setSpiralColor1(pick(WAVE_COLORS));
-      s.setMandalaColor1(pick(WAVE_COLORS));
-    }
-    if (Math.random() < 0.5) {
-      s.setInstinctFrequency(rnd(0.005, 0.08));
-    }
+    s.setInstinctMode(["water", "organic", "fragments", "ifs"][randInt(s.instinctModeCount)] as InstinctMode);
   }
 }
 

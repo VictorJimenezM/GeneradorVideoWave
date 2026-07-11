@@ -1,6 +1,14 @@
 import { useRef, type ChangeEvent } from "react";
 import CollapsibleSection from "../CollapsibleSection";
-import { bgPresets, BG_IMAGE_FILTERS, type BgImageFilter } from "../../utils/fondo";
+import { BG_IMAGE_FILTERS, type BgImageFilter } from "../../utils/fondo";
+
+const COLOR_BUTTONS: { label: string; value: string }[] = [
+  { label: "Verde (croma)", value: "#00ff00" },
+  { label: "Negro", value: "#000000" },
+  { label: "Blanco", value: "#ffffff" },
+  { label: "Azul", value: "#0000ff" },
+  { label: "Rojo", value: "#ff0000" },
+];
 
 interface BgImageSample {
   id: string;
@@ -110,10 +118,26 @@ export default function BgSection({
     </span>
   );
 
+  const colorHeaderButtons = (
+    <span className="flex items-center justify-end gap-1" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      {COLOR_BUTTONS.map((c) => {
+        const isActive = bgColor.toLowerCase() === c.value.toLowerCase();
+        return (
+          <button key={c.value} type="button" onClick={() => { setBgColor(c.value); setActiveBgPreset(null); }}
+            disabled={isDecoding || isRecording}
+            aria-label={`Color de fondo: ${c.label}`}
+            style={{ backgroundColor: c.value }}
+            className={`h-4 w-4 rounded-sm border transition-all duration-200 ${isActive ? "border-violet-400 ring-1 ring-violet-400/60" : "border-white/20 hover:border-white/50"}`}
+          />
+        );
+      })}
+    </span>
+  );
+
   return (
     <CollapsibleSection
       title="Fondo"
-      headerCenter={bgHeaderCenter}
+      headerCenter={bgMode === "image" ? bgHeaderCenter : bgMode === "color" ? colorHeaderButtons : undefined}
       collapsed={collapsed}
       onToggle={onToggle}
       icon={<div aria-hidden="true" className="h-1 w-1 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(139,92,246,0.6)]" />}
@@ -139,20 +163,6 @@ export default function BgSection({
         bgMode === "color" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
       }`}>
         <div className="pt-0.5 space-y-1">
-          <div className="flex flex-wrap gap-1">
-            {bgPresets.map((p) => (
-              <button key={p.id} type="button" onClick={() => applyBgPreset(p.id)} disabled={isDecoding || isRecording}
-                aria-label={`Fondo preset: ${p.label}`}
-                className={`rounded-lg px-2 py-0.5 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
-                  activeBgPreset === p.id
-                    ? "bg-violet-500/20 text-violet-300 border border-violet-500/40"
-                    : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:border-slate-600/50"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
           <label className="block">
             <div className="text-xs font-medium text-slate-400 tracking-wide pb-0.5">Personalizado</div>
             <div className="flex items-center gap-1.5">

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type KeyboardEvent, type ReactNode } from "react";
 
 export default function CollapsibleSection({
   title,
@@ -30,14 +30,23 @@ export default function CollapsibleSection({
   const sectionId = title.toLowerCase().replace(/[\s/]+/g, "-");
   const labelId = `${sectionId}-label`;
 
+  const handleHeaderKey = (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
     <div>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
+        onKeyDown={handleHeaderKey}
         aria-expanded={!collapsed}
         aria-controls={sectionId}
-        className={`flex w-full items-center gap-1 py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 rounded-sm ${headerBg || ''}`}
+        className={`flex w-full items-center gap-1 py-0.5 text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 rounded-sm ${headerBg || ''}`}
       >
         <svg
           aria-hidden="true"
@@ -55,19 +64,10 @@ export default function CollapsibleSection({
         <span id={labelId} className={`text-xs font-semibold tracking-wider text-slate-400 uppercase ${!headerCenter ? "flex-1" : ""}`}>
           {title}
         </span>
-        {headerCenter && (
-          <span className="flex items-center flex-1">
-            <span className="flex-1 flex items-center justify-end">{headerCenter}</span>
-            {titleButtons && (
-              <span className="flex gap-0.5 items-center flex-shrink-0">
-                {titleButtons}
-              </span>
-            )}
-          </span>
-        )}
-        {!headerCenter && titleButtons && (
-          <span className="flex gap-0.5 items-center flex-shrink-0">
+        {(titleButtons || headerCenter) && (
+          <span className="flex flex-1 items-center justify-end gap-0.5">
             {titleButtons}
+            {headerCenter}
           </span>
         )}
         {onToggleEnabled && (
@@ -92,7 +92,7 @@ export default function CollapsibleSection({
             </button>
           </span>
         )}
-      </button>
+      </div>
       <div
         id={sectionId}
         role="region"
