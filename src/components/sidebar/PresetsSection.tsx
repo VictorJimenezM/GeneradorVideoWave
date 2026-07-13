@@ -21,10 +21,10 @@ export default function PresetsSection({
 }: Props) {
   const presets = [
     { label: "Croma", key: "croma" },
-    { label: "Imagen", key: "image" },
-    { label: "Fractal 1", key: "fractal1" },
-    { label: "Fractal 2", key: "fractal2" },
-    { label: "Fractal 3", key: "fractal3" },
+    { label: "Usuario 1", key: "user1" },
+    { label: "Usuario 2", key: "user2" },
+    { label: "Usuario 3", key: "user3" },
+    { label: "Muyuqi", key: "muyuqi" },
   ];
 
   return (
@@ -58,7 +58,7 @@ export default function PresetsSection({
             ← Resetear valores
           </button>
           <button type="button" onClick={saveCurrentToActivePreset}
-            disabled={!activePreset}
+            disabled={!activePreset || activePreset === "muyuqi"}
             aria-label="Guardar preset activo"
             className="w-full rounded-lg px-1 py-0.5 text-[11px] font-medium bg-slate-800/60 text-amber-400 border border-slate-700/50 hover:border-amber-500/50 hover:text-amber-300 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
           >

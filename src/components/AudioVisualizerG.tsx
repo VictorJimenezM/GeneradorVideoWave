@@ -22,9 +22,9 @@ import { INSTINCT_MODES, drawInstinctFractal, drawInstinctPreview } from "../uti
 import { fftLikePointsPerCircle, getPointXY, drawAdditionalPath, drawTip, drawStaticWaveform, type Point, type WaveStyle } from "../utils/wave";
 import { emitParticles, updateAndDrawParticles } from "../utils/particles";
 import { drawTitle, resolveTitleFamily, type TitleStyle } from "../utils/title";
-import { bgPresets, drawFondoCanvas, getBgFilterCss, type BgImageFilter } from "../utils/fondo";
+import { bgPresets, drawFondoCanvas, getBgFilterCss, BG_IMAGE_FILTERS, type BgImageFilter } from "../utils/fondo";
 import { syncAllCanvasSizes as syncSizes, setCanvasVideoSize as setVideoSize, clearCanvasSolid as clearCanvas } from "../utils/canvas";
-import { buildPrecomputedGeometry as buildGeo, getCurrentAmplitude as getAmp } from "../utils/audio";
+import { buildPrecomputedGeometry as buildGeo, getCurrentAmplitude as getAmp, detectBPM } from "../utils/audio";
 
 
 
@@ -187,6 +187,9 @@ export default function AudioVisualizer() {
     };
     resetImg.src = DEFAULT_BG_SAMPLES[0].src;
     setActivePreset(null);
+    setBgAutoRotate(false);
+    setBgFilterAutoRotate(false);
+    bgLastBeatTimeRef.current = -1;
     showToast("Valores restablecidos");
   }, [showToast]);
 
@@ -342,6 +345,13 @@ export default function AudioVisualizer() {
     { id: "4", label: "Muestra 4", src: "/fondo_muestra_4.jpg" },
   ];
 
+  const MUYUQI_BG_SAMPLES: BgImageSample[] = [
+    { id: "1", label: "Muy1", src: "/MuyuqiPreset/Muy1.png" },
+    { id: "2", label: "Muy2", src: "/MuyuqiPreset/Muy2.png" },
+    { id: "3", label: "Muy3", src: "/MuyuqiPreset/Muy3.png" },
+    { id: "4", label: "Muy4", src: "/MuyuqiPreset/Muy4.png" },
+  ];
+
   const loadBgImageSamples = (): BgImageSample[] => {
     try {
       const raw = localStorage.getItem("bgImageSamples");
@@ -368,6 +378,8 @@ export default function AudioVisualizer() {
 
   const [bgImagePreset, setBgImagePreset] = useState<string>("1");
   const [bgImageFilter, setBgImageFilter] = useState<BgImageFilter>("none");
+  const [bgAutoRotate, setBgAutoRotate] = useState(false);
+  const [bgFilterAutoRotate, setBgFilterAutoRotate] = useState(false);
 
   // Live parameters (state + refs for drawing loop).
   const [showWave, setShowWave] = useState(true);
@@ -446,6 +458,10 @@ export default function AudioVisualizer() {
     mandalaLineWidth,
     mandalaColor1,
     mandalaColor2,
+    bgAutoRotate,
+    bgFilterAutoRotate,
+    bgImagePresets,
+    bgImagePreset,
   });
 
   const instinctParamsRef = useRef({
@@ -464,6 +480,7 @@ export default function AudioVisualizer() {
       rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
       spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
       mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+      bgAutoRotate, bgFilterAutoRotate, bgImagePresets, bgImagePreset,
     };
     bgImageRef.current = bgImage;
     redrawFondoCanvas();
@@ -476,6 +493,7 @@ export default function AudioVisualizer() {
     rippleRingCount, rippleSpeed, rippleAmplitude, rippleThickness, rippleColor1, rippleColor2,
     spiralDensity, spiralRotationSpeed, spiralTightness, spiralDotSize, spiralColor1, spiralColor2,
     mandalaSegments, mandalaRotationSpeed, mandalaComplexity, mandalaLineWidth, mandalaColor1, mandalaColor2,
+    bgAutoRotate, bgFilterAutoRotate, bgImagePresets, bgImagePreset,
   ]);
 
   useEffect(() => {
@@ -547,6 +565,9 @@ export default function AudioVisualizer() {
   const iaStateRef = useRef({ active: false, update: (_t: number, _a: number) => {} });
   iaStateRef.current.active = isIAAsistentActive;
   iaStateRef.current.update = iaUpdate;
+
+  const bgBpmRef = useRef(120);
+  const bgLastBeatTimeRef = useRef(-1);
 
   // When IA activates, set background to static black
   useEffect(() => {
@@ -748,6 +769,7 @@ export default function AudioVisualizer() {
       totalSamplesRef.current = length;
       durationRef.current = audioBuffer.duration;
       sampleRateRef.current = audioBuffer.sampleRate;
+      bgBpmRef.current = detectBPM(mono, audioBuffer.sampleRate);
 
       buildPrecomputedGeometry();
       setWaveformReady(true);
@@ -945,6 +967,38 @@ export default function AudioVisualizer() {
     const ia = iaStateRef.current;
     if (ia.active) {
       ia.update(currentTime, getCurrentAmplitude());
+    }
+
+    if (p.bgAutoRotate || p.bgFilterAutoRotate) {
+      const bgBeatInterval = 60 / bgBpmRef.current;
+      if (bgLastBeatTimeRef.current < 0) {
+        bgLastBeatTimeRef.current = currentTime;
+      } else if (currentTime - bgLastBeatTimeRef.current >= bgBeatInterval) {
+        bgLastBeatTimeRef.current += bgBeatInterval;
+        if (p.bgAutoRotate) {
+          const presets = p.bgImagePresets;
+          const cur = presets.findIndex((pp) => pp.id === p.bgImagePreset);
+          const next = presets[(cur + 1) % presets.length];
+          if (next) {
+            setBgImagePreset(next.id);
+            setBgMode("image");
+            const loadImg = new Image();
+            loadImg.onload = () => {
+              setBgImage(loadImg);
+              bgImageRef.current = loadImg;
+              drawBgToFondoCanvas();
+              clearCanvasSolid();
+            };
+            loadImg.src = next.src;
+          }
+        }
+        if (p.bgFilterAutoRotate) {
+          const filters = BG_IMAGE_FILTERS;
+          const cur = filters.findIndex((f) => f.value === p.bgImageFilter);
+          const next = filters[(cur + 1) % filters.length];
+          if (next) setBgImageFilter(next.value);
+        }
+      }
     }
 
     const waveData = {
@@ -1614,7 +1668,7 @@ export default function AudioVisualizer() {
 
   const saveCurrentToActivePreset = useCallback(() => {
     const key = activePreset;
-    if (!key) return;
+    if (!key || key === "muyuqi") return;
     const data = {
       bgMode, bgColor, activeBgPreset,
       fractalEnabled, fractalType, fractalLayerMode, fractalOpacity, fractalAudioReactive,
@@ -1657,84 +1711,82 @@ export default function AudioVisualizer() {
   }, []);
 
   const applyQuickPreset = useCallback((key: string) => {
-    const expandBg = () => {
-      setCollapsedSections(new Set(SECTION_KEYS.filter((k) => k !== "bg")));
-    };
     setActivePreset(key);
 
-    const saved = loadSavedPreset(key);
-    if (saved) {
-      expandBg();
-      setBgMode(saved.bgMode);
-      setBgColor(saved.bgColor);
-      setActiveBgPreset(saved.activeBgPreset ?? null);
-      setFractalEnabled(saved.fractalEnabled);
-      setFractalType(saved.fractalType);
-      setFractalLayerMode(saved.fractalLayerMode);
-      setFractalOpacity(saved.fractalOpacity);
-      setFractalAudioReactive(saved.fractalAudioReactive);
-      setRippleRingCount(saved.rippleRingCount);
-      setRippleSpeed(saved.rippleSpeed);
-      setRippleAmplitude(saved.rippleAmplitude);
-      setRippleThickness(saved.rippleThickness);
-      setRippleColor1(saved.rippleColor1);
-      setRippleColor2(saved.rippleColor2);
-      setSpiralDensity(saved.spiralDensity);
-      setSpiralRotationSpeed(saved.spiralRotationSpeed);
-      setSpiralTightness(saved.spiralTightness);
-      setSpiralDotSize(saved.spiralDotSize);
-      setSpiralColor1(saved.spiralColor1);
-      setSpiralColor2(saved.spiralColor2);
-      setMandalaSegments(saved.mandalaSegments);
-      setMandalaRotationSpeed(saved.mandalaRotationSpeed);
-      setMandalaComplexity(saved.mandalaComplexity);
-      setMandalaLineWidth(saved.mandalaLineWidth);
-      setMandalaColor1(saved.mandalaColor1);
-      setMandalaColor2(saved.mandalaColor2);
-      if (saved.instinctMode !== undefined) setInstinctMode(saved.instinctMode);
-      if (saved.instinctSpeed !== undefined) setInstinctSpeed(saved.instinctSpeed);
-      if (saved.instinctStrength !== undefined) setInstinctStrength(saved.instinctStrength);
-      if (saved.instinctFrequency !== undefined) setInstinctFrequency(saved.instinctFrequency);
-      if (saved.instinctEnabled !== undefined) setInstinctEnabled(saved.instinctEnabled);
-      if (saved.layerOrder !== undefined) setLayerOrder(saved.layerOrder);
-      setWaveColor(saved.waveColor);
-      setWaveGradientMode(saved.waveGradientMode);
-      setGradColor1(saved.gradColor1);
-      setGradColor2(saved.gradColor2);
-      setGlowIntensity(saved.glowIntensity);
-      setShowWave(saved.showWave ?? true);
-      setShowParticles(saved.showParticles);
-      setParticleColor(saved.particleColor);
-      setParticleOpacity(saved.particleOpacity);
-      setRadiusRatio(saved.radiusRatio);
-      setIntensity(saved.intensity);
-      setStrokeWidth(saved.strokeWidth);
-      setShowTitle(saved.showTitle ?? true);
-      setSongTitle(saved.songTitle);
-      setTitleColor(saved.titleColor);
-      if (saved.titlePreset) setTitlePreset(saved.titlePreset);
-      if (saved.titleFont) setTitleFont(saved.titleFont);
-      if (saved.titleWeight) setTitleWeight(saved.titleWeight);
-      if (typeof saved.titleItalic === "boolean") setTitleItalic(saved.titleItalic);
-      if (saved.titleAlign) setTitleAlign(saved.titleAlign);
-      if (saved.titleValign) setTitleValign(saved.titleValign);
-      if (typeof saved.titleSizeScale === "number") setTitleSizeScale(saved.titleSizeScale);
-      if (typeof saved.titleCurve === "number") setTitleCurve(saved.titleCurve);
-      if (saved.titleMotion) setTitleMotion(saved.titleMotion);
-      if (typeof saved.titleMotionAmount === "number") setTitleMotionAmount(saved.titleMotionAmount);
-      if (saved.bgMode === "image") {
-        loadSampleBgImage();
-      } else if (saved.bgMode === "color") {
-        setBgImage(null);
-        bgImageRef.current = null;
-        setBgImagePreset("custom");
+    if (key !== "muyuqi") {
+      const saved = loadSavedPreset(key);
+      if (saved) {
+        setBgMode(saved.bgMode);
+        setBgColor(saved.bgColor);
+        setActiveBgPreset(saved.activeBgPreset ?? null);
+        setFractalEnabled(saved.fractalEnabled);
+        setFractalType(saved.fractalType);
+        setFractalLayerMode(saved.fractalLayerMode);
+        setFractalOpacity(saved.fractalOpacity);
+        setFractalAudioReactive(saved.fractalAudioReactive);
+        setRippleRingCount(saved.rippleRingCount);
+        setRippleSpeed(saved.rippleSpeed);
+        setRippleAmplitude(saved.rippleAmplitude);
+        setRippleThickness(saved.rippleThickness);
+        setRippleColor1(saved.rippleColor1);
+        setRippleColor2(saved.rippleColor2);
+        setSpiralDensity(saved.spiralDensity);
+        setSpiralRotationSpeed(saved.spiralRotationSpeed);
+        setSpiralTightness(saved.spiralTightness);
+        setSpiralDotSize(saved.spiralDotSize);
+        setSpiralColor1(saved.spiralColor1);
+        setSpiralColor2(saved.spiralColor2);
+        setMandalaSegments(saved.mandalaSegments);
+        setMandalaRotationSpeed(saved.mandalaRotationSpeed);
+        setMandalaComplexity(saved.mandalaComplexity);
+        setMandalaLineWidth(saved.mandalaLineWidth);
+        setMandalaColor1(saved.mandalaColor1);
+        setMandalaColor2(saved.mandalaColor2);
+        if (saved.instinctMode !== undefined) setInstinctMode(saved.instinctMode);
+        if (saved.instinctSpeed !== undefined) setInstinctSpeed(saved.instinctSpeed);
+        if (saved.instinctStrength !== undefined) setInstinctStrength(saved.instinctStrength);
+        if (saved.instinctFrequency !== undefined) setInstinctFrequency(saved.instinctFrequency);
+        if (saved.instinctEnabled !== undefined) setInstinctEnabled(saved.instinctEnabled);
+        if (saved.layerOrder !== undefined) setLayerOrder(saved.layerOrder);
+        setWaveColor(saved.waveColor);
+        setWaveGradientMode(saved.waveGradientMode);
+        setGradColor1(saved.gradColor1);
+        setGradColor2(saved.gradColor2);
+        setGlowIntensity(saved.glowIntensity);
+        setShowWave(saved.showWave ?? true);
+        setShowParticles(saved.showParticles);
+        setParticleColor(saved.particleColor);
+        setParticleOpacity(saved.particleOpacity);
+        setRadiusRatio(saved.radiusRatio);
+        setIntensity(saved.intensity);
+        setStrokeWidth(saved.strokeWidth);
+        setShowTitle(saved.showTitle ?? true);
+        setSongTitle(saved.songTitle);
+        setTitleColor(saved.titleColor);
+        if (saved.titlePreset) setTitlePreset(saved.titlePreset);
+        if (saved.titleFont) setTitleFont(saved.titleFont);
+        if (saved.titleWeight) setTitleWeight(saved.titleWeight);
+        if (typeof saved.titleItalic === "boolean") setTitleItalic(saved.titleItalic);
+        if (saved.titleAlign) setTitleAlign(saved.titleAlign);
+        if (saved.titleValign) setTitleValign(saved.titleValign);
+        if (typeof saved.titleSizeScale === "number") setTitleSizeScale(saved.titleSizeScale);
+        if (typeof saved.titleCurve === "number") setTitleCurve(saved.titleCurve);
+        if (saved.titleMotion) setTitleMotion(saved.titleMotion);
+        if (typeof saved.titleMotionAmount === "number") setTitleMotionAmount(saved.titleMotionAmount);
+        if (saved.bgMode === "image") {
+          loadSampleBgImage();
+        } else if (saved.bgMode === "color") {
+          setBgImage(null);
+          bgImageRef.current = null;
+          setBgImagePreset("custom");
+        }
+        return;
       }
-      return;
     }
 
     switch (key) {
       case "croma":
-        expandBg();
+        setSongTitle("");
         setBgMode("color");
         setBgColor("#00d64f");
         setWaveColor("#ffffff");
@@ -1743,39 +1795,171 @@ export default function AudioVisualizer() {
         bgImageRef.current = null;
         setBgImagePreset("custom");
         break;
-      case "fractal1":
-        expandBg();
+      case "user2":
+        setSongTitle("");
         setBgMode("fractal");
         setFractalEnabled(true);
         setFractalType("ripple");
         setFractalLayerMode("overlay");
+        setFractalOpacity(0.65);
         setFractalAudioReactive(true);
+        setRippleRingCount(12);
+        setRippleSpeed(0.15);
+        setRippleAmplitude(35);
+        setRippleThickness(2.5);
+        setRippleColor1("#34d399");
+        setRippleColor2("#60a5fa");
+        setInstinctEnabled(true);
+        setInstinctMode("organic");
+        setInstinctSpeed(0.4);
+        setInstinctStrength(20);
+        setInstinctFrequency(0.010);
+        setRadiusRatio(0.62);
+        setIntensity(0.40);
+        setStrokeWidth(0.8);
+        setGlowIntensity(0.25);
+        setWaveColor("#e2e8f0");
+        setWaveGradientMode("solid");
+        setShowParticles(true);
+        setParticleColor("#34d399");
+        setParticleOpacity(0.45);
         break;
-      case "fractal2":
-        expandBg();
+      case "user3":
+        setSongTitle("");
         setBgMode("fractal");
         setFractalEnabled(true);
         setFractalType("mandala");
         setFractalLayerMode("overlay");
-        setFractalOpacity(0.7);
+        setFractalOpacity(0.90);
         setFractalAudioReactive(true);
+        setMandalaSegments(12);
+        setMandalaRotationSpeed(0.15);
+        setMandalaComplexity(5);
+        setMandalaLineWidth(12.0);
+        setMandalaColor1("#f43f5e");
+        setMandalaColor2("#06b6d4");
+        setInstinctEnabled(true);
+        setInstinctMode("fragments");
+        setInstinctSpeed(0.6);
+        setInstinctStrength(35);
+        setInstinctFrequency(0.015);
+        setRadiusRatio(0.45);
+        setIntensity(0.75);
+        setStrokeWidth(3.5);
+        setGlowIntensity(0.75);
+        setWaveColor("#ffffff");
+        setWaveGradientMode("rainbow");
+        setGradColor1("#f43f5e");
+        setGradColor2("#06b6d4");
+        setShowParticles(true);
+        setParticleColor("#f43f5e");
+        setParticleOpacity(0.80);
         break;
-      case "fractal3":
-        expandBg();
-        setBgMode("fractal");
+      case "muyuqi": {
+        setBgImagePresets(MUYUQI_BG_SAMPLES);
+        setBgMode("image");
+        setBgImagePreset("1");
+        const img = new Image();
+        img.onload = () => {
+          setBgImage(img);
+          bgImageRef.current = img;
+          drawBgToFondoCanvas();
+          clearCanvasSolid();
+        };
+        img.onerror = () => {
+          setBgImage(null);
+          bgImageRef.current = null;
+        };
+        img.src = MUYUQI_BG_SAMPLES[0].src;
+
+        setFractalEnabled(true);
+        setFractalType("mandala");
+        setFractalLayerMode("overlay");
+        setFractalOpacity(1.0);
+        setMandalaSegments(19);
+        setMandalaRotationSpeed(0.0);
+        setMandalaComplexity(6);
+        setMandalaLineWidth(19.5);
+
+        setInstinctEnabled(true);
+        setInstinctMode("ifs");
+        setInstinctSpeed(0.1);
+        setInstinctStrength(95);
+        setInstinctFrequency(0.090);
+
+        setSongTitle("MUYUQI");
+        setTitleColor("#e5b752");
+        setTitleFont("pacifico");
+        setTitleWeight("bold");
+        setTitleItalic(false);
+        setTitleAlign("center");
+        setTitleValign("middle");
+        setTitleSizeScale(2.0);
+        setTitleCurve(0.60);
+        setTitleMotion("pulse");
+        setTitleMotionAmount(0.80);
+        setTextPresetIdx(-1);
+
+        setRadiusRatio(0.60);
+        setIntensity(0.27);
+        setStrokeWidth(0.5);
+        setGlowIntensity(0.55);
+        setWaveColor("#fcfcfc");
+        setWaveGradientMode("solid");
+        setShowParticles(true);
+        setParticleColor("#3c39c0");
+        setParticleOpacity(0.55);
+        setWavePresetIdx(-1);
+        break;
+      }
+      case "user1":
+        setSongTitle("");
+        setBgMode("image");
+        setBgImagePreset("1");
+        loadSampleBgImage();
         setFractalEnabled(true);
         setFractalType("spiral");
         setFractalLayerMode("overlay");
+        setFractalOpacity(0.85);
         setFractalAudioReactive(true);
-        break;
-      case "image":
-        expandBg();
-        setBgMode("image");
-        setFractalEnabled(false);
-        loadSampleBgImage();
+        setSpiralDensity(200);
+        setSpiralRotationSpeed(0.3);
+        setSpiralTightness(0.80);
+        setSpiralDotSize(8.0);
+        setSpiralColor1("#c084fc");
+        setSpiralColor2("#38bdf8");
+        setInstinctEnabled(true);
+        setInstinctMode("water");
+        setInstinctSpeed(0.3);
+        setInstinctStrength(15);
+        setInstinctFrequency(0.008);
+        setRadiusRatio(0.55);
+        setIntensity(0.55);
+        setStrokeWidth(1.5);
+        setGlowIntensity(0.60);
+        setWaveColor("#c084fc");
+        setWaveGradientMode("gradient");
+        setGradColor1("#818cf8");
+        setGradColor2("#38bdf8");
+        setShowParticles(true);
+        setParticleColor("#c084fc");
+        setParticleOpacity(0.50);
         break;
     }
-  }, [loadSavedPreset, loadSampleBgImage]);
+  }, [
+    loadSavedPreset, loadSampleBgImage,
+    setBgMode, setBgImagePreset,
+    setFractalEnabled, setFractalType, setFractalLayerMode, setFractalOpacity, setFractalAudioReactive,
+    setRippleRingCount, setRippleSpeed, setRippleAmplitude, setRippleThickness, setRippleColor1, setRippleColor2,
+    setSpiralDensity, setSpiralRotationSpeed, setSpiralTightness, setSpiralDotSize, setSpiralColor1, setSpiralColor2,
+    setMandalaSegments, setMandalaRotationSpeed, setMandalaComplexity, setMandalaLineWidth, setMandalaColor1, setMandalaColor2,
+    setInstinctEnabled, setInstinctMode, setInstinctSpeed, setInstinctStrength, setInstinctFrequency,
+    setSongTitle, setTitleColor, setTitleFont, setTitleWeight, setTitleItalic,
+    setTitleAlign, setTitleValign, setTitleSizeScale, setTitleCurve, setTitleMotion, setTitleMotionAmount,
+    setRadiusRatio, setIntensity, setStrokeWidth, setGlowIntensity, setWaveColor,
+    setWaveGradientMode, setGradColor1, setGradColor2,
+    setShowParticles, setParticleColor, setParticleOpacity,
+  ]);
 
   const onPickFile = async (file: File | null) => {
     setError(null);
@@ -1920,6 +2104,10 @@ export default function AudioVisualizer() {
               isDecoding={isDecoding}
               isRecording={isRecording}
               isPreviewing={isPreviewing}
+              bgAutoRotate={bgAutoRotate}
+              setBgAutoRotate={setBgAutoRotate}
+              bgFilterAutoRotate={bgFilterAutoRotate}
+              setBgFilterAutoRotate={setBgFilterAutoRotate}
             />
 
             {layerOrder.map((layer, _mapIdx, arr) => {
