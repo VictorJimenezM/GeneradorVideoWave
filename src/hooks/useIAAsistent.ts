@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FractalType } from "../utils/fractals";
 import type { InstinctMode } from "../utils/instinct";
+import { detectBPM } from "../utils/audio";
 
 export type IAIAssistantMode = "aggressive" | "sensitive";
 
@@ -32,52 +33,6 @@ export interface IAReturn {
   bpm: number | null;
   currentBeatIndex: number;
   update: (currentTime: number, amplitude: number) => void;
-}
-
-function detectBPM(samples: Float32Array, sampleRate: number): number {
-  const windowSize = 2048;
-  const hopSize = 512;
-
-  const energy: number[] = [];
-  for (let i = 0; i < samples.length - windowSize; i += hopSize) {
-    let sumSq = 0;
-    for (let j = 0; j < windowSize; j++) {
-      sumSq += samples[i + j] * samples[i + j];
-    }
-    energy.push(Math.sqrt(sumSq / windowSize));
-  }
-
-  if (energy.length < 10) return 120;
-
-  const onset: number[] = [];
-  for (let i = 1; i < energy.length; i++) {
-    onset.push(Math.max(0, energy[i] - energy[i - 1]));
-  }
-
-  const minBPM = 70;
-  const maxBPM = 200;
-  const minLag = Math.max(1, Math.floor(((60 / maxBPM) * sampleRate) / hopSize));
-  const maxLag = Math.min(onset.length - 1, Math.ceil(((60 / minBPM) * sampleRate) / hopSize));
-
-  let bestLag = minLag;
-  let bestCorr = -Infinity;
-
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    let corr = 0;
-    let count = 0;
-    for (let i = 0; i < onset.length - lag; i++) {
-      corr += onset[i] * onset[i + lag];
-      count++;
-    }
-    corr /= count;
-    if (corr > bestCorr) {
-      bestCorr = corr;
-      bestLag = lag;
-    }
-  }
-
-  const bpm = Math.round(60 / ((bestLag * hopSize) / sampleRate));
-  return Math.max(70, Math.min(200, bpm));
 }
 
 function randInt(max: number): number {

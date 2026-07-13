@@ -38,6 +38,10 @@ interface Props {
   isDecoding: boolean;
   isRecording: boolean;
   isPreviewing: boolean;
+  bgAutoRotate: boolean;
+  setBgAutoRotate: (v: boolean) => void;
+  bgFilterAutoRotate: boolean;
+  setBgFilterAutoRotate: (v: boolean) => void;
 }
 
 const DEFAULT_BG_SAMPLES: BgImageSample[] = [
@@ -57,6 +61,8 @@ export default function BgSection({
   bgImagePresets, onReplaceBgImagePreset, onResetBgImagePreset,
   bgImageFilter, setBgImageFilter,
   isDecoding, isRecording, isPreviewing,
+  bgAutoRotate, setBgAutoRotate,
+  bgFilterAutoRotate, setBgFilterAutoRotate,
 }: Props) {
   const handleReplace = (id: string, e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -178,6 +184,30 @@ export default function BgSection({
         bgMode === "image" ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
       }`}>
         <div className="pt-0.5 space-y-1.5">
+          <div className="flex gap-2">
+            <span className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+              <button type="button" onClick={() => setBgAutoRotate(!bgAutoRotate)}
+                className={`relative w-10 h-4 rounded transition-all duration-200 flex-shrink-0 border ${
+                  bgAutoRotate ? "bg-red-600 border-red-500" : "bg-neutral-950 border-neutral-700"
+                }`}>
+                <span className={`absolute left-0.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-white uppercase select-none transition-opacity duration-200 ${bgAutoRotate ? "opacity-100" : "opacity-25"}`}>ON</span>
+                <span className={`absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-white uppercase select-none transition-opacity duration-200 ${!bgAutoRotate ? "opacity-100" : "opacity-25"}`}>OFF</span>
+                <span className={`absolute top-[1px] z-10 h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-all duration-200 ${bgAutoRotate ? "right-[1px]" : "left-[1px]"}`} />
+              </button>
+              <span className="text-[10px] text-slate-400">Rotar img</span>
+            </span>
+            <span className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+              <button type="button" onClick={() => setBgFilterAutoRotate(!bgFilterAutoRotate)}
+                className={`relative w-10 h-4 rounded transition-all duration-200 flex-shrink-0 border ${
+                  bgFilterAutoRotate ? "bg-red-600 border-red-500" : "bg-neutral-950 border-neutral-700"
+                }`}>
+                <span className={`absolute left-0.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-white uppercase select-none transition-opacity duration-200 ${bgFilterAutoRotate ? "opacity-100" : "opacity-25"}`}>ON</span>
+                <span className={`absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-white uppercase select-none transition-opacity duration-200 ${!bgFilterAutoRotate ? "opacity-100" : "opacity-25"}`}>OFF</span>
+                <span className={`absolute top-[1px] z-10 h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-all duration-200 ${bgFilterAutoRotate ? "right-[1px]" : "left-[1px]"}`} />
+              </button>
+              <span className="text-[10px] text-slate-400">Rotar filtro</span>
+            </span>
+          </div>
           <div className="grid grid-cols-2 gap-1.5">
             {bgImagePresets.map((p) => {
               const isActive = bgImagePreset === p.id;
