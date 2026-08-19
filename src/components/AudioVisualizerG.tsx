@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RecordRTC from "recordrtc";
 import IAAsistentPanel from "./IAAsistentPanel";
 import { useIAAsistent } from "../hooks/useIAAsistent";
-import { initFFmpeg, isFFmpegLoaded, isFFmpegLoading, waitForFFmpeg, convertToMp4 } from "../utils/convertWebmToMp4";
+import { initFFmpeg, isFFmpegLoaded, isFFmpegLoading, waitForFFmpeg, convertToMp4, trimAudio } from "../utils/convertWebmToMp4";
+import AudioCutterModal from "./AudioCutterModal";
 import ConversionProgress from "./ConversionProgress";
 import CollapsibleSection from "./CollapsibleSection";
 import FileDropZone from "./FileDropZone";
@@ -190,6 +191,10 @@ export default function AudioVisualizer() {
     setBgAutoRotate(false);
     setBgFilterAutoRotate(false);
     bgLastBeatTimeRef.current = -1;
+    setAudioSourceMode("file");
+    setYouTubeUrl("");
+    setIsDownloading(false);
+    setShowCutterModal(false);
     showToast("Valores restablecidos");
   }, [showToast]);
 
@@ -240,6 +245,7 @@ export default function AudioVisualizer() {
   // UI / audio
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioObjectUrlRef = useRef<string | null>(null);
+  const currentAudioFileRef = useRef<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isMobile] = useState(() =>
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -251,6 +257,10 @@ export default function AudioVisualizer() {
   const [waveformReady, setWaveformReady] = useState(false);
   const [isLoopingUI, setIsLoopingUI] = useState(true);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [audioSourceMode, setAudioSourceMode] = useState<"file" | "youtube">("file");
+  const [youTubeUrl, setYouTubeUrl] = useState("");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [showCutterModal, setShowCutterModal] = useState(false);
 
   // --- RESOLUTION ---
   const [resolution, setResolution] = useState<"720p" | "1080p" | "4K">("1080p");
@@ -1347,6 +1357,18 @@ export default function AudioVisualizer() {
       clearCanvasSolid();
       resetDrawingState();
 
+      // Pre-draw primer frame para que captureStream no empiece en negro
+      drawFondoCanvas(fondoCtxRef.current, fondoCanvasRef.current, paramsRef.current.bgColor, bgImageRef.current, getBgFilterCss(paramsRef.current.bgImageFilter));
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (fondoCanvasRef.current) ctx.drawImage(fondoCanvasRef.current, 0, 0);
+      for (const layer of layerOrder) {
+        if (layer === "fractal" && paramsRef.current.fractalEnabled && fractalCanvasRef.current) {
+          ctx.drawImage(fractalCanvasRef.current, 0, 0);
+        } else if (layer === "instinct" && instinctParamsRef.current.enabled && instinctCanvasRef.current) {
+          ctx.drawImage(instinctCanvasRef.current, 0, 0);
+        }
+      }
+
       stopAnimationOnly();
 
       try {
@@ -1510,10 +1532,11 @@ export default function AudioVisualizer() {
     const fctx = fondoCtxRef.current;
     if (!fc || !fctx) return;
     syncAllCanvasSizes();
-    fctx.clearRect(0, 0, fc.width, fc.height);
+    fctx.fillStyle = "#000000";
+    fctx.fillRect(0, 0, fc.width, fc.height);
     const img = bgImageRef.current;
     if (img) {
-      const scale = Math.max(fc.width / img.width, fc.height / img.height);
+      const scale = Math.min(fc.width / img.width, fc.height / img.height);
       const x = (fc.width - img.width * scale) / 2;
       const y = (fc.height - img.height * scale) / 2;
       fctx.drawImage(img, x, y, img.width * scale, img.height * scale);
@@ -1986,6 +2009,7 @@ export default function AudioVisualizer() {
     setFileName("");
     setFileSize(0);
     setAudioUrl(null);
+    currentAudioFileRef.current = null;
 
     if (!file) return;
     const validAudioExts = ["mp3", "wav", "ogg", "m4a", "flac", "aac", "wma", "aiff", "opus"];
@@ -1999,8 +2023,103 @@ export default function AudioVisualizer() {
     setAudioUrl(url);
     setFileName(file.name);
     setFileSize(file.size);
+    currentAudioFileRef.current = file;
 
     await decodeAudioToMono(file);
+  };
+
+  const onPickYouTubeUrl = async () => {
+    setError(null);
+    setRecordError(null);
+
+    const url = youTubeUrl.trim();
+    if (!url) {
+      setError("Pega un link de YouTube válido.");
+      return;
+    }
+    if (!/youtu(\.be|be\.com)/.test(url)) {
+      setError("URL de YouTube inválida. Usa un link de youtube.com oyoutu.be.");
+      return;
+    }
+
+    stopAnimationOnly();
+    setIsPreviewing(false);
+    setIsDownloading(true);
+
+    if (audioObjectUrlRef.current) {
+      URL.revokeObjectURL(audioObjectUrlRef.current);
+      audioObjectUrlRef.current = null;
+    }
+
+    monoSamplesRef.current = null;
+    totalSamplesRef.current = 0;
+    durationRef.current = 0;
+    precomputedCosRef.current = null;
+    precomputedSinRef.current = null;
+    sampleStepRef.current = 1;
+    pointCountRef.current = 0;
+    setWaveformReady(false);
+    setIsDecoding(false);
+
+    setFileName("");
+    setFileSize(0);
+    setAudioUrl(null);
+    currentAudioFileRef.current = null;
+
+    try {
+      const res = await fetch("/api/youtube-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `Error HTTP ${res.status}` }));
+        throw new Error(body.error ?? `Error al descargar audio (HTTP ${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const title = decodeURIComponent(res.headers.get("X-Video-Title") || "youtube-audio");
+      const file = new File([blob], `${title}.mp3`, { type: "audio/mpeg" });
+
+      const objUrl = URL.createObjectURL(file);
+      audioObjectUrlRef.current = objUrl;
+      setAudioUrl(objUrl);
+      setFileName(`${title}.mp3`);
+      setFileSize(blob.size);
+      currentAudioFileRef.current = file;
+
+      await decodeAudioToMono(file);
+    } catch (e: any) {
+      setError(e?.message ?? "Error al descargar audio desde YouTube.");
+      setIsDecoding(false);
+      setWaveformReady(false);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleApplyTrim = async (trimmedBlob: Blob, trimmedName: string) => {
+    if (audioObjectUrlRef.current) {
+      URL.revokeObjectURL(audioObjectUrlRef.current);
+      audioObjectUrlRef.current = null;
+    }
+
+    const ext = trimmedName.split(".").pop()?.toLowerCase() || "mp3";
+    const trimmedFile = new File([trimmedBlob], trimmedName, { type: `audio/${ext}` });
+    const objUrl = URL.createObjectURL(trimmedFile);
+
+    audioObjectUrlRef.current = objUrl;
+    setAudioUrl(objUrl);
+    setFileName(trimmedName);
+    setFileSize(trimmedBlob.size);
+    currentAudioFileRef.current = trimmedFile;
+
+    stopAnimationOnly();
+    setIsPreviewing(false);
+
+    await decodeAudioToMono(trimmedFile);
+    setShowCutterModal(false);
   };
 
   useEffect(() => {
@@ -2032,6 +2151,7 @@ export default function AudioVisualizer() {
   }, [fileName, fileSize]);
 
   return (
+    <>
     <section className="glass glass-hover animate-fade-in overflow-hidden p-4">
       <div className="flex flex-col gap-4 md:flex-row">
         <aside className="w-full md:w-72 sidebar-surface flex flex-col">
@@ -2070,6 +2190,14 @@ export default function AudioVisualizer() {
               isPreviewing={isPreviewing}
               onPickFile={onPickFile}
               fileMeta={fileMeta}
+              audioSourceMode={audioSourceMode}
+              onAudioSourceModeChange={setAudioSourceMode}
+              youTubeUrl={youTubeUrl}
+              onYouTubeUrlChange={setYouTubeUrl}
+              onPickYouTubeUrl={onPickYouTubeUrl}
+              isDownloading={isDownloading}
+              onOpenCutter={() => setShowCutterModal(true)}
+              hasAudio={!!audioUrl && waveformReady}
             />
 
             <PresetsSection
@@ -2365,5 +2493,17 @@ export default function AudioVisualizer() {
         </div>
       </div>
     </section>
+
+    {showCutterModal && audioUrl && (
+      <AudioCutterModal
+        open={showCutterModal}
+        audioUrl={audioUrl}
+        audioFile={currentAudioFileRef.current}
+        fileName={fileName}
+        onClose={() => setShowCutterModal(false)}
+        onApplyTrim={handleApplyTrim}
+      />
+    )}
+    </>
   );
 }

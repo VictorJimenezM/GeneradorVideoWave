@@ -37,6 +37,7 @@ src/
 │   ├── FileDropZone.tsx      # Drag-and-drop wrapper (extracted from AudioVisualizerG)
 │   ├── IAAsistentPanel.tsx   # IA Assistant panel (2-column header, playback controls, reset w/ confirm modal)
 │   ├── ConfirmModal.tsx       # Reusable confirm modal (createPortal, ESC/click-outside close, red confirm)
+│   ├── AudioCutterModal.tsx   # Audio trimmer modal (waveform canvas, markers, FFmpeg cut)
 │   └── sidebar/
 │       ├── AudioSection.tsx
 │       ├── PresetsSection.tsx
@@ -68,6 +69,7 @@ public/
 └── fondo_muestra_4.jpg
 
 Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
+vite.config.ts  — Vite plugins (React, COEP/COOP headers, youtube-audio-proxy)
 ```
 
 ## Utilities & constants
@@ -120,20 +122,137 @@ type WaveGradientMode = "solid" | "gradient" | "rainbow";
 
 ## Audio decoding pipeline
 
+Two input modes: **file upload** or **YouTube URL download**.
+
+### File upload path
 1. `onPickFile` → `URL.createObjectURL` + `decodeAudioToMono`
-2. `AudioContext.decodeAudioData()` → raw PCM
-3. Mix all channels to mono (`Float32Array`)
-4. Precompute circular cos/sin arrays mapping `pcmIndex → angle = (idx/total)*2π - π/2`
-5. `fftLikePointsPerCircle = 2600` — sample step = `max(1, total/2600)`
+
+### YouTube path
+1. `handleYouTubeDownload` → `POST /api/youtube-audio` → yt-dlp proxy → MP3 blob
+2. Creates `File` from blob → `URL.createObjectURL` → `decodeAudioToMono`
+
+### Shared decoding
+1. `AudioContext.decodeAudioData()` → raw PCM
+2. Mix all channels to mono (`Float32Array`)
+3. Precompute circular cos/sin arrays mapping `pcmIndex → angle = (idx/total)*2π - π/2`
+4. `fftLikePointsPerCircle = 2600` — sample step = `max(1, total/2600)`
 
 Audio is **not** streamed through Web Audio API nodes; raw samples are indexed directly by `currentTime / duration`.
+
+## YouTube audio download
+
+The Audio section has two modes toggled by buttons at the top: **Subir archivo** (file upload) and **YouTube** (URL download).
+
+### Architecture
+
+```mermaid
+flowchart LR
+    A[User pastes YouTube URL] --> B[AudioSection input]
+    B --> C[handleYouTubeDownload]
+    C --> D[POST /api/youtube-audio]
+    D --> E[Vite middleware proxy]
+    E --> F[yt-dlp CLI]
+    F --> G[MP3 blob]
+    G --> H[File → ObjectURL → decodeAudioToMono]
+    H --> I[Visualizer ready]
+```
+
+### Backend proxy (`vite.config.ts`)
+
+A Vite dev-server plugin (`youtube-audio-proxy`) registers `POST /api/youtube-audio`:
+
+1. Validates the URL with regex `/youtu(\.be|be\.com)/`
+2. Runs `yt-dlp --print %(title)s <url>` (30s timeout) to fetch the video title
+3. Runs `yt-dlp -x --audio-format mp3 --audio-quality 128K -o /tmp/ytaudio_<hex>.mp3 <url>` (300s timeout)
+4. Returns the MP3 as `audio/mpeg` with `X-Video-Title` header (URL-encoded title)
+5. Cleans up the temp file in `finally`
+
+**Flags**: `--js-runtimes deno`, `--extractor-args youtube:player_client=android`, `--no-playlist`
+
+**Dev-only**: the middleware is registered via `configureServer()`, so it only works with `npm run dev` (not production builds unless a separate backend is deployed). Requires `yt-dlp` installed on the host.
+
+### Client handler (`handleYouTubeDownload` in `AudioVisualizerG.tsx`)
+
+1. Validates URL (non-empty, matches YouTube regex); shows Spanish error on failure
+2. Stops any active animation/preview, revokes previous audio object URL, resets waveform refs
+3. Sends `POST /api/youtube-audio` with `{ url }`
+4. On success: extracts title from `X-Video-Title` header, creates `File` named `<title>.mp3`, creates object URL, calls `decodeAudioToMono(file)`
+5. On error: parses JSON error body, shows message
+
+### State
+
+| Variable | Type | Purpose |
+|----------|------|---------|
+| `audioSourceMode` | `"file" \| "youtube"` | Current audio input mode (default `"file"`) |
+| `youTubeUrl` | `string` | YouTube URL input |
+| `isDownloading` | `boolean` | Loading state for YouTube download |
+
+### AudioSection UI (`src/components/sidebar/AudioSection.tsx`)
+
+- Two toggle buttons: "Subir archivo" (indigo) / "YouTube" (red)
+- YouTube mode: text input (`"Pega el link de YouTube aquí..."`) + "Descargar audio" button (red themed)
+- Button shows spinner + `"Descargando audio..."` while `isDownloading`
+- Enter key triggers download; disabled when busy or URL is empty
+
+## Audio Trimmer (CORTA)
+
+Botón **CORTA** en la sección Audio del sidebar que abre un modal para recortar el audio.
+
+### Componente
+
+| Archivo | Rol |
+|---------|------|
+| `src/components/AudioCutterModal.tsx` | Modal: waveform lineal, controles de reproducción, marcadores I/F, corte via FFmpeg |
+
+### Funcionamiento
+
+1. Al abrir: decodifica el audio actual (fetch + AudioContext) para obtener los samples mono
+2. Dibuja la onda lineal en un canvas (barras verticales centradas, indigo)
+3. Cursor blanco que sigue la posición de reproducción
+4. Click en el canvas = seeks a esa posición
+
+### Controles
+
+| Botón | Acción |
+|-------|--------|
+| **▶ Play** | Reproduce/pausa desde la posición actual (todo el audio) |
+| **⏮ Inicio** | Marca `trimStart = currentTime` (línea verde con label "I") |
+| **▶▶ Solo corte** | Solo reproduce entre Inicio y Fin (pausa automáticamente en Fin) |
+| **⏭ Fin** | Marca `trimEnd = currentTime` (línea roja con label "F") |
+| **Establecer** | Corta el audio con FFmpeg y reemplaza el archivo actual |
+
+### Marcadores
+
+- **Inicio** (`trimStart`): línea vertical verde + label "I"
+- **Fin** (`trimEnd`): línea vertical roja + label "F"
+- Región seleccionada: overlay semitransparente indigo entre los dos marcadores
+- Solo se colocan con botones (no arrastrables)
+
+### Corte con FFmpeg
+
+Función `trimAudio()` en `src/utils/convertWebmToMp4.ts`:
+- Reutiliza la instancia FFmpeg singleton (ya cargada por `initFFmpeg`)
+- `-ss` y `-to` después de `-i` para corte preciso
+- Output: MP3 192kbps
+- Nombre del archivo: `{original}_cortado.mp3`
+- `currentAudioFileRef` en `AudioVisualizerG.tsx` guarda el `File` original para procesamiento
+
+### Flujo completo
+
+```
+Botón CORTA → AudioCutterModal → marcar I/F → Establecer
+  → trimAudio(file, start, end) → FFmpeg MEMFS → Blob MP3
+  → onApplyTrim(blob, "nombre_cortado.mp3")
+  → AudioVisualizerG: revoca URL → crea File → createObjectURL
+  → decodeAudioToMono(nuevoFile) → visualizer listo
+```
 
 ## Sidebar order
 
 | # | Section | Content |
 |---|---------|---------|
 | 0 | — | **Panel IA Assistant** en grid de 2 columnas (ver detalle abajo) |
-| 1 | **Audio** (collapsible, open by default) | File input + drag-drop + file info |
+| 1 | **Audio** (collapsible, open by default) | Toggle **Subir archivo** / **YouTube**. Modo archivo: file input + drag-drop + file info. Modo YouTube: input de URL + botón "Descargar audio" (usa yt-dlp vía proxy). Botón **CORTA** (amber) que abre modal de corte de audio |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
 | 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 muestras de color en el header + picker personalizado en el cuerpo), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)). Header con **doble stepper** (`‹ N/4 ›` muestra + `‹ Normal ›` filtro de color) que **solo se muestra en modo Imagen**; en modo Color el header muestra las 5 muestras de color, ver [Steppers del header de Fondo](#steppers-del-header-de-fondo) |
 | 4 | **Fractal** (collapsible) | Stepper `‹🌊›` para tipo (ripple/spiral/mandala), checkbox reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
@@ -252,6 +371,7 @@ Reset defaults: single `resetDefaults()` button restores all 30+ state variables
 - `instinctSpeed` = `0.5`, `instinctStrength` = `25`, `instinctFrequency` = `0.012`
 - `songTitle` = `""`, `titleColor` = `"#ff0000"` (rojo), `titlePreset` = `"bottom-center"`, `titleFont` = `"arial"`, `titleWeight` = `"bold"`, `titleAlign` = `"center"`, `titleValign` = `"middle"`, `titleSizeScale` = `1.5`, `textPresetIdx` = `0`
 - `resolution` = `"1080p"`, `loop` = `true`, `isLoopingUI` = `true`
+- `audioSourceMode` = `"file"`, `youTubeUrl` = `""`, `isDownloading` = `false`
 
 ## 5-canvas rendering pipeline
 
@@ -490,6 +610,8 @@ FFmpeg.wasm is loaded on mount from CDN (`@ffmpeg/ffmpeg@0.11.6` + `@ffmpeg/core
 | `handlePreview()` | Start animation loop in `"preview"` mode |
 | `handleGenerateAndDownloadRealtime()` | Start recording in `"record"` mode |
 | `downloadBlob(blob, extension, customName?)` | Download blob with filename derived from input file or fallback `audio-visualizer-{Date}` |
+| `handleYouTubeDownload()` | Download audio from YouTube URL via yt-dlp proxy, decode and load into visualizer |
+| `handleApplyTrim(blob, name)` | Replace current audio with trimmed blob, re-decode and refresh visualizer |
 | `redrawFondoCanvas()` | Redraw background canvas (solid color or image) when params change (idle only) |
 | `redrawFractalCanvas()` | Redraw fractal canvas when params change (idle only) |
 | `drawFondoCanvas(ctx, canvas, bgColor, bgImage)` | fondo.ts — solid color or cover-fit bg image |
@@ -549,4 +671,6 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - **v1.10.2** — Presets ya no abren/cierran submenús al hacer click. Se elimina `expandBg()` de `applyQuickPreset`; los submenús solo responden a clicks en sus headers y al botón "Colapsar".
 - **v1.10.1** — Renombrado de presets rápidos: "Imagen"→"Usuario 1" (`user1`), "Fractal 1"→"Usuario 2" (`user2`), "Fractal 2"→"Usuario 3" (`user3`). Croma y Muyuqi se mantienen. Keys internos cambiados (invalida presets guardados previos con keys viejos).
 - **v1.10.0** — Toggles de rotación automática por beat en Fondo (pestaña Imagen): dos botones ON/OFF independientes de la IA que rotan la imagen de fondo y el filtro de imagen al ritmo de la música. `detectBPM` extraído de `useIAAsistent.ts` a `utils/audio.ts` para reutilización. BPM detectado al cargar audio; beat tracking independiente en `tick()` con `bgBpmRef`/`bgLastBeatTimeRef`. Los toggles no se deshabilitan durante grabación; `resetDefaults()` los apaga.
+- **v1.11.0** — Descarga de audio desde YouTube: sección Audio con toggle "Subir archivo" / "YouTube". Backend proxy en `vite.config.ts` (`youtube-audio-proxy`) que invoca `yt-dlp` para extraer MP3 (128K, player_client=android, --no-playlist). Handler `handleYouTubeDownload` en `AudioVisualizerG.tsx` valida URL, descarga blob, extrae título del header `X-Video-Title` y decodifica vía `decodeAudioToMono`. UI: input de URL + botón "Descargar audio" con spinner. Solo funciona en dev-server (`configureServer`). Requiere `yt-dlp` instalado en el host.
+- **v1.12.0** — Audio Trimmer (CORTA): botón amber en AudioSection abre `AudioCutterModal` con onda lineal en canvas, cursor de reproducción, marcadores Inicio/Fin (verde/rojo), play general y play de selección, botón "Establecer" que corta con FFmpeg.wasm (`trimAudio()` en `convertWebmToMp4.ts`: `-ss`/`-to` después de `-i`, MP3 192kbps). `currentAudioFileRef` guarda el File original. `handleApplyTrim` reemplaza el audio: revoca URL, crea File con sufijo `_cortado`, re-decodifica con `decodeAudioToMono`. AudioCutterModal usa `createPortal`, su propio `<audio>` element y `AudioContext` independiente.
  

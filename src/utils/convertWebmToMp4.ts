@@ -154,3 +154,52 @@ export async function convertToMp4(
   console.log("[ffmpeg] ✓ Conversión completada");
   return { blob, filename: `audio-visualizer-${Date.now()}.mp4` };
 }
+
+export async function trimAudio(
+  file: File,
+  startTime: number,
+  endTime: number,
+  callbacks?: ConversionCallbacks
+): Promise<Blob> {
+  if (!ffmpeg) throw new Error("FFmpeg no está inicializado");
+
+  ffmpeg.setLogger?.(({ type, message }) => {
+    if (type === "fferr" && callbacks?.onLog) {
+      callbacks.onLog(message);
+    }
+  });
+
+  ffmpeg.setProgress?.((event) => {
+    const raw = (event as any)?.ratio ?? (event as any)?.progress ?? 0;
+    const pct = Math.round(Number(raw) * 100);
+    callbacks?.onProgress?.(Number.isFinite(pct) ? pct : 0);
+  });
+
+  const ext = file.name.split(".").pop()?.toLowerCase() || "mp3";
+  const inputName = `trim_input.${ext}`;
+  const outputName = "trim_output.mp3";
+
+  console.log("[ffmpeg] trimAudio: escribiendo", inputName, "en MEMFS...");
+  const { fetchFile } = window.FFmpeg;
+  ffmpeg.FS("writeFile", inputName, await fetchFile(file));
+
+  console.log(`[ffmpeg] trimAudio: cortando de ${startTime.toFixed(2)}s a ${endTime.toFixed(2)}s...`);
+  await ffmpeg.run(
+    "-i", inputName,
+    "-ss", String(startTime),
+    "-to", String(endTime),
+    "-c:a", "libmp3lame",
+    "-b:a", "192k",
+    outputName
+  );
+
+  console.log("[ffmpeg] trimAudio: leyendo", outputName, "...");
+  const data = ffmpeg.FS("readFile", outputName);
+
+  try { ffmpeg.FS("unlink", inputName); } catch { /* ignore */ }
+  try { ffmpeg.FS("unlink", outputName); } catch { /* ignore */ }
+
+  const blob = new Blob([data.buffer], { type: "audio/mpeg" });
+  console.log("[ffmpeg] ✓ trimAudio completado");
+  return blob;
+}

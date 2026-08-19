@@ -36,9 +36,10 @@ export function drawFondoCanvas(
   bgImage: HTMLImageElement | null,
   filterCss: string = "none"
 ) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (bgImage) {
-    const scale = Math.max(canvas.width / bgImage.width, canvas.height / bgImage.height);
+    const scale = Math.min(canvas.width / bgImage.width, canvas.height / bgImage.height);
     const x = (canvas.width - bgImage.width * scale) / 2;
     const y = (canvas.height - bgImage.height * scale) / 2;
     ctx.filter = filterCss;
