@@ -1,4 +1,4 @@
-import { type Ref, useState } from "react";
+import { type Ref, type RefObject } from "react";
 import CollapsibleSection from "../CollapsibleSection";
 import FileDropZone from "../FileDropZone";
 
@@ -19,7 +19,8 @@ interface Props {
   youTubeUrl: string;
   onYouTubeUrlChange: (url: string) => void;
   onPickYouTubeUrl: () => void;
-  isDownloading: boolean;
+  onPickYouTubeFile: (file: File | null) => void;
+  youTubeFileInputRef: RefObject<HTMLInputElement>;
   onOpenCutter: () => void;
   hasAudio: boolean;
 }
@@ -39,11 +40,12 @@ export default function AudioSection({
   youTubeUrl,
   onYouTubeUrlChange,
   onPickYouTubeUrl,
-  isDownloading,
+  onPickYouTubeFile,
+  youTubeFileInputRef,
   onOpenCutter,
   hasAudio,
 }: Props) {
-  const busy = isDecoding || isRecording || isPreviewing || isDownloading;
+  const busy = isDecoding || isRecording || isPreviewing;
 
   return (
     <CollapsibleSection
@@ -127,18 +129,21 @@ export default function AudioSection({
               onClick={onPickYouTubeUrl}
               className="w-full rounded-lg bg-red-500/20 px-2 py-1.5 text-xs font-medium text-red-200 transition-all duration-200 hover:bg-red-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {isDownloading ? (
-                <span className="flex items-center justify-center gap-1.5">
-                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Descargando audio...
-                </span>
-              ) : (
-                "Descargar audio"
-              )}
+              Descargar en y2mate
             </button>
+            <p className="text-[10px] text-slate-500 leading-tight">
+              Se abrirá y2mate en una pestaña nueva. Descarga el MP3 y súbelo aquí.
+            </p>
+            <input
+              ref={youTubeFileInputRef}
+              type="file"
+              accept=".mp3"
+              aria-label="Subir MP3 descargado"
+              disabled={busy}
+              className="block w-full rounded-lg border border-slate-800 bg-slate-950/60 text-xs text-slate-200 transition-all duration-200 file:mr-2 file:rounded-lg file:border-0 file:bg-red-500/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-red-200 hover:file:bg-red-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+              onClick={(e) => { e.currentTarget.value = "" }}
+              onChange={(e) => onPickYouTubeFile(e.target.files?.[0] ?? null)}
+            />
           </>
         )}
 

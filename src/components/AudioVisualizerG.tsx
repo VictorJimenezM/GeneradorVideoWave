@@ -259,7 +259,7 @@ export default function AudioVisualizer() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [audioSourceMode, setAudioSourceMode] = useState<"file" | "youtube">("file");
   const [youTubeUrl, setYouTubeUrl] = useState("");
-  const [isDownloading, setIsDownloading] = useState(false);
+  const youTubeFileInputRef = useRef<HTMLInputElement>(null);
   const [showCutterModal, setShowCutterModal] = useState(false);
 
   // --- RESOLUTION ---
@@ -2028,7 +2028,7 @@ export default function AudioVisualizer() {
     await decodeAudioToMono(file);
   };
 
-  const onPickYouTubeUrl = async () => {
+  const onPickYouTubeUrl = () => {
     setError(null);
     setRecordError(null);
 
@@ -2037,14 +2037,21 @@ export default function AudioVisualizer() {
       setError("Pega un link de YouTube válido.");
       return;
     }
-    if (!/youtu(\.be|be\.com)/.test(url)) {
+    const idMatch = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|live\/|shorts\/)|[?&]v=)([a-zA-Z0-9-_]{11})/.exec(url);
+    if (!idMatch) {
       setError("URL de YouTube inválida. Usa un link de youtube.com oyoutu.be.");
       return;
     }
 
+    window.open(`https://y2mate.gs/es/#${idMatch[1]}`, "_blank", "noopener");
+  };
+
+  const onPickYouTubeFile = async (file: File | null) => {
+    if (!file) return;
+    setError(null);
+    setRecordError(null);
     stopAnimationOnly();
     setIsPreviewing(false);
-    setIsDownloading(true);
 
     if (audioObjectUrlRef.current) {
       URL.revokeObjectURL(audioObjectUrlRef.current);
@@ -2059,44 +2066,15 @@ export default function AudioVisualizer() {
     sampleStepRef.current = 1;
     pointCountRef.current = 0;
     setWaveformReady(false);
-    setIsDecoding(false);
 
-    setFileName("");
-    setFileSize(0);
-    setAudioUrl(null);
-    currentAudioFileRef.current = null;
+    const objUrl = URL.createObjectURL(file);
+    audioObjectUrlRef.current = objUrl;
+    setAudioUrl(objUrl);
+    setFileName(file.name);
+    setFileSize(file.size);
+    currentAudioFileRef.current = file;
 
-    try {
-      const res = await fetch("/api/youtube-audio", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: `Error HTTP ${res.status}` }));
-        throw new Error(body.error ?? `Error al descargar audio (HTTP ${res.status})`);
-      }
-
-      const blob = await res.blob();
-      const title = decodeURIComponent(res.headers.get("X-Video-Title") || "youtube-audio");
-      const file = new File([blob], `${title}.mp3`, { type: "audio/mpeg" });
-
-      const objUrl = URL.createObjectURL(file);
-      audioObjectUrlRef.current = objUrl;
-      setAudioUrl(objUrl);
-      setFileName(`${title}.mp3`);
-      setFileSize(blob.size);
-      currentAudioFileRef.current = file;
-
-      await decodeAudioToMono(file);
-    } catch (e: any) {
-      setError(e?.message ?? "Error al descargar audio desde YouTube.");
-      setIsDecoding(false);
-      setWaveformReady(false);
-    } finally {
-      setIsDownloading(false);
-    }
+    await decodeAudioToMono(file);
   };
 
   const handleApplyTrim = async (trimmedBlob: Blob, trimmedName: string) => {
@@ -2195,7 +2173,8 @@ export default function AudioVisualizer() {
               youTubeUrl={youTubeUrl}
               onYouTubeUrlChange={setYouTubeUrl}
               onPickYouTubeUrl={onPickYouTubeUrl}
-              isDownloading={isDownloading}
+              onPickYouTubeFile={onPickYouTubeFile}
+              youTubeFileInputRef={youTubeFileInputRef}
               onOpenCutter={() => setShowCutterModal(true)}
               hasAudio={!!audioUrl && waveformReady}
             />

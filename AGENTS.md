@@ -69,7 +69,7 @@ public/
 └── fondo_muestra_4.jpg
 
 Infra: Dockerfile, Dockerfile.dev, docker-compose.yml, vercel.json, .cert/
-vite.config.ts  — Vite plugins (React, COEP/COOP headers, youtube-audio-proxy)
+vite.config.ts  — Vite plugins (React, COEP/COOP headers)
 ```
 
 ## Utilities & constants
@@ -128,8 +128,9 @@ Two input modes: **file upload** or **YouTube URL download**.
 1. `onPickFile` → `URL.createObjectURL` + `decodeAudioToMono`
 
 ### YouTube path
-1. `handleYouTubeDownload` → `POST /api/youtube-audio` → yt-dlp proxy → MP3 blob
-2. Creates `File` from blob → `URL.createObjectURL` → `decodeAudioToMono`
+1. `onPickYouTubeUrl` → extracts video ID → opens `https://y2mate.gs/es/#<id>` in new tab
+2. User downloads MP3 from y2mate, returns to app
+3. `onPickYouTubeFile` → `URL.createObjectURL` + `decodeAudioToMono`
 
 ### Shared decoding
 1. `AudioContext.decodeAudioData()` → raw PCM
@@ -148,36 +149,26 @@ The Audio section has two modes toggled by buttons at the top: **Subir archivo**
 ```mermaid
 flowchart LR
     A[User pastes YouTube URL] --> B[AudioSection input]
-    B --> C[handleYouTubeDownload]
-    C --> D[POST /api/youtube-audio]
-    D --> E[Vite middleware proxy]
-    E --> F[yt-dlp CLI]
-    F --> G[MP3 blob]
+    B --> C[onPickYouTubeUrl]
+    C --> D[Opens y2mate.gs in new tab]
+    D --> E[User downloads MP3 from y2mate]
+    E --> F[User uploads MP3 back to app]
+    F --> G[onPickYouTubeFile]
     G --> H[File → ObjectURL → decodeAudioToMono]
     H --> I[Visualizer ready]
 ```
 
-### Backend proxy (`vite.config.ts`)
-
-A Vite dev-server plugin (`youtube-audio-proxy`) registers `POST /api/youtube-audio`:
-
-1. Validates the URL with regex `/youtu(\.be|be\.com)/`
-2. Runs `yt-dlp --print %(title)s <url>` (30s timeout) to fetch the video title
-3. Runs `yt-dlp -x --audio-format mp3 --audio-quality 128K -o /tmp/ytaudio_<hex>.mp3 <url>` (300s timeout)
-4. Returns the MP3 as `audio/mpeg` with `X-Video-Title` header (URL-encoded title)
-5. Cleans up the temp file in `finally`
-
-**Flags**: `--js-runtimes deno`, `--extractor-args youtube:player_client=android`, `--no-playlist`
-
-**Dev-only**: the middleware is registered via `configureServer()`, so it only works with `npm run dev` (not production builds unless a separate backend is deployed). Requires `yt-dlp` installed on the host.
-
-### Client handler (`handleYouTubeDownload` in `AudioVisualizerG.tsx`)
+### Client handler (`onPickYouTubeUrl` in `AudioVisualizerG.tsx`)
 
 1. Validates URL (non-empty, matches YouTube regex); shows Spanish error on failure
-2. Stops any active animation/preview, revokes previous audio object URL, resets waveform refs
-3. Sends `POST /api/youtube-audio` with `{ url }`
-4. On success: extracts title from `X-Video-Title` header, creates `File` named `<title>.mp3`, creates object URL, calls `decodeAudioToMono(file)`
-5. On error: parses JSON error body, shows message
+2. Extracts 11-char video ID from URL
+3. Opens `https://y2mate.gs/es/#<videoId>` in a new browser tab (user downloads MP3 from y2mate)
+
+### Upload handler (`onPickYouTubeFile` in `AudioVisualizerG.tsx`)
+
+1. Stops any active animation/preview, revokes previous audio object URL, resets waveform refs
+2. Creates object URL from uploaded MP3 file, sets audio state
+3. Calls `decodeAudioToMono(file)` to process audio
 
 ### State
 
@@ -185,14 +176,14 @@ A Vite dev-server plugin (`youtube-audio-proxy`) registers `POST /api/youtube-au
 |----------|------|---------|
 | `audioSourceMode` | `"file" \| "youtube"` | Current audio input mode (default `"file"`) |
 | `youTubeUrl` | `string` | YouTube URL input |
-| `isDownloading` | `boolean` | Loading state for YouTube download |
 
 ### AudioSection UI (`src/components/sidebar/AudioSection.tsx`)
 
 - Two toggle buttons: "Subir archivo" (indigo) / "YouTube" (red)
-- YouTube mode: text input (`"Pega el link de YouTube aquí..."`) + "Descargar audio" button (red themed)
-- Button shows spinner + `"Descargando audio..."` while `isDownloading`
-- Enter key triggers download; disabled when busy or URL is empty
+- YouTube mode: text input (`"Pega el link de YouTube aquí..."`) + "Descargar en y2mate" button (red themed)
+- Helper text: "Se abrirá y2mate en una pestaña nueva. Descarga el MP3 y súbelo aquí."
+- File input for uploading the downloaded MP3
+- Enter key triggers y2mate open; disabled when busy or URL is empty
 
 ## Audio Trimmer (CORTA)
 
@@ -252,7 +243,7 @@ Botón CORTA → AudioCutterModal → marcar I/F → Establecer
 | # | Section | Content |
 |---|---------|---------|
 | 0 | — | **Panel IA Assistant** en grid de 2 columnas (ver detalle abajo) |
-| 1 | **Audio** (collapsible, open by default) | Toggle **Subir archivo** / **YouTube**. Modo archivo: file input + drag-drop + file info. Modo YouTube: input de URL + botón "Descargar audio" (usa yt-dlp vía proxy). Botón **CORTA** (amber) que abre modal de corte de audio |
+| 1 | **Audio** (collapsible, open by default) | Toggle **Subir archivo** / **YouTube**. Modo archivo: file input + drag-drop + file info. Modo YouTube: input de URL + botón "Descargar en y2mate" (abre y2mate en nueva pestaña) + file input para subir el MP3 descargado. Botón **CORTA** (amber) que abre modal de corte de audio |
 | 2 | **Presets** (collapsible) | Grid 5 presets + [← Resetear valores \| Guardar preset] |
 | 3 | **Fondo** (collapsible) | 2 tabs: **Color** (5 muestras de color en el header + picker personalizado en el cuerpo), **Imagen** (cuadrícula 2×2 de 4 muestras, click-para-reemplazar, ver [Gestor de muestras de imagen](#gestor-de-muestras-de-imagen)). Header con **doble stepper** (`‹ N/4 ›` muestra + `‹ Normal ›` filtro de color) que **solo se muestra en modo Imagen**; en modo Color el header muestra las 5 muestras de color, ver [Steppers del header de Fondo](#steppers-del-header-de-fondo) |
 | 4 | **Fractal** (collapsible) | Stepper `‹🌊›` para tipo (ripple/spiral/mandala), checkbox reactivo al audio, opacidad, preview (80×80) + controles específicos por tipo |
@@ -610,7 +601,7 @@ FFmpeg.wasm is loaded on mount from CDN (`@ffmpeg/ffmpeg@0.11.6` + `@ffmpeg/core
 | `handlePreview()` | Start animation loop in `"preview"` mode |
 | `handleGenerateAndDownloadRealtime()` | Start recording in `"record"` mode |
 | `downloadBlob(blob, extension, customName?)` | Download blob with filename derived from input file or fallback `audio-visualizer-{Date}` |
-| `handleYouTubeDownload()` | Download audio from YouTube URL via yt-dlp proxy, decode and load into visualizer |
+| `handleYouTubeDownload()` | Open y2mate in new tab for YouTube audio download, user uploads MP3 back |
 | `handleApplyTrim(blob, name)` | Replace current audio with trimmed blob, re-decode and refresh visualizer |
 | `redrawFondoCanvas()` | Redraw background canvas (solid color or image) when params change (idle only) |
 | `redrawFractalCanvas()` | Redraw fractal canvas when params change (idle only) |
@@ -673,4 +664,5 @@ Standalone hook at `src/hooks/useAudioAnalyser.ts`:
 - **v1.10.0** — Toggles de rotación automática por beat en Fondo (pestaña Imagen): dos botones ON/OFF independientes de la IA que rotan la imagen de fondo y el filtro de imagen al ritmo de la música. `detectBPM` extraído de `useIAAsistent.ts` a `utils/audio.ts` para reutilización. BPM detectado al cargar audio; beat tracking independiente en `tick()` con `bgBpmRef`/`bgLastBeatTimeRef`. Los toggles no se deshabilitan durante grabación; `resetDefaults()` los apaga.
 - **v1.11.0** — Descarga de audio desde YouTube: sección Audio con toggle "Subir archivo" / "YouTube". Backend proxy en `vite.config.ts` (`youtube-audio-proxy`) que invoca `yt-dlp` para extraer MP3 (128K, player_client=android, --no-playlist). Handler `handleYouTubeDownload` en `AudioVisualizerG.tsx` valida URL, descarga blob, extrae título del header `X-Video-Title` y decodifica vía `decodeAudioToMono`. UI: input de URL + botón "Descargar audio" con spinner. Solo funciona en dev-server (`configureServer`). Requiere `yt-dlp` instalado en el host.
 - **v1.12.0** — Audio Trimmer (CORTA): botón amber en AudioSection abre `AudioCutterModal` con onda lineal en canvas, cursor de reproducción, marcadores Inicio/Fin (verde/rojo), play general y play de selección, botón "Establecer" que corta con FFmpeg.wasm (`trimAudio()` en `convertWebmToMp4.ts`: `-ss`/`-to` después de `-i`, MP3 192kbps). `currentAudioFileRef` guarda el File original. `handleApplyTrim` reemplaza el audio: revoca URL, crea File con sufijo `_cortado`, re-decodifica con `decodeAudioToMono`. AudioCutterModal usa `createPortal`, su propio `<audio>` element y `AudioContext` independiente.
+- **v1.13.0** — YouTube download migrado de backend yt-dlp a y2mate + upload manual. Se elimina el plugin `youtube-audio-proxy` de `vite.config.ts` (junto con imports de `execFile`, `promisify`, `randomBytes`, `parseJsonBody`, `YTDLP_ARGS`). `onPickYouTubeUrl` ahora extrae el video ID y abre `https://y2mate.gs/es/#<id>` en nueva pestaña. Nuevo `onPickYouTubeFile` procesa el MP3 subido por el usuario. `AudioSection` en modo YouTube muestra botón "Descargar en y2mate", texto guía y un `<input type="file" accept=".mp3">`. Se elimina el estado `isDownloading` y el spinner de descarga.
  
