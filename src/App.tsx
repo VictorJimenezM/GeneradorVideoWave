@@ -101,7 +101,7 @@ export default function App() {
             Descarga el proyecto
           </a>
         </footer>
-        <p className="pb-4 text-center text-xs text-slate-600">Version 1.13.0</p>
+        <p className="pb-4 text-center text-xs text-slate-600">Version 1.13.1</p>
       </div>
     </div>
   );

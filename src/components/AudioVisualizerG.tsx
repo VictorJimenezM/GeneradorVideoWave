@@ -985,6 +985,9 @@ export default function AudioVisualizer() {
         bgLastBeatTimeRef.current = currentTime;
       } else if (currentTime - bgLastBeatTimeRef.current >= bgBeatInterval) {
         bgLastBeatTimeRef.current += bgBeatInterval;
+        if (bgLastBeatTimeRef.current > currentTime) {
+          bgLastBeatTimeRef.current = currentTime;
+        }
         if (p.bgAutoRotate) {
           const presets = p.bgImagePresets;
           const cur = presets.findIndex((pp) => pp.id === p.bgImagePreset);
